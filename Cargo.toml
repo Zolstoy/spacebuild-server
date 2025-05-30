@@ -1,0 +1,67 @@
+[package]
+name = "spacebuild-server"
+version = "0.1.0"
+authors = ["Zolstoy <zolstoy.dev@gmail.com>"]
+edition = "2021"
+
+[lib]
+name = "spacebuild"
+doctest = false
+
+[[bin]]
+name = "server"
+test = false
+doctest = false
+
+[[bin]]
+name = "siege"
+test = false
+doctest = false
+
+[[bin]]
+name = "viewer"
+test = false
+doctest = false
+
+[dependencies]
+bincode = "2.0.1"
+clap = { version = "4.5.39", features = ["derive"] }
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"]}
+futures = "0.3.31"
+futures-time = "3.0.0"
+http-body-util = "0.1.3"
+hyper = {version = "1.6.0", features = ["server", "client", "http1"]}
+hyper-rustls = {version = "0.27.6", features = ["native-tokio"]}
+hyper-tungstenite = "0.17.0"
+hyper-util = {version = "0.1.14", features = ["full"]}
+is_printable = "0.1.1"
+itertools = "0.14.0"
+log = { version = "0.4.27"}
+rand = "0.9.1"
+rand_chacha = "0.9.0"
+regex = "1.11.1"
+rstar = "0.12.2"
+rustls = { version = "0.23.27"}
+rustls-native-certs = { version = "0.8.1"}
+rustls-pemfile = { version = "2.2.0"}
+rustls-pki-types = { version = "1.12.0"}
+scilib = "1.0.0"
+scopeguard = "1.2.0"
+serde = { version = "1.0.219", features = ["derive"]}
+serde_json = "1.0.140"
+sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio"]}
+thiserror = "2.0.12"
+tokio = { version = "1.45.1", features = ["full"]}
+tokio-rustls = { version = "0.26.2"}
+tokio-stream = "0.1.17"
+tokio-tungstenite = {version = "0.26.2", features = ["rustls"]}
+uuid = {version = "1.17.0", features = ["v4","fast-rng","macro-diagnostics","serde"]}
+webpki = { version = "0.22.4", features = ["alloc"]}
+webpki-roots = { version = "1.0.0"}
+anyhow = "1.0.98"
+ratatui = "0.29.0"
+crossterm = { version = "0.29.0", features = ["event-stream"]}
+env_logger = "0.11.8"
+
+[dev-dependencies]
+test-helpers-async = "0.2.3"
