@@ -6,17 +6,9 @@ use test_helpers_async::*;
 mod spacebuild_tests_game {
     use std::{env, sync::Arc};
 
-    use anyhow::anyhow;
     use futures_time::{future::FutureExt, time::Duration};
-    use log::info;
-    use spacebuild::{
-        client::Client,
-        // game::repr::Vector3,
-        instance::Instance,
-        network::tls::{ClientPki, ServerPki},
-        protocol::GameInfo,
-        server,
-    };
+    use scilib::coordinate::cartesian::Cartesian;
+    use spacebuild::{bot, instance::Instance, protocol::state::Game, server, spacebuild_log, tls::ServerPki, tracing};
     use tokio::{net::TcpListener, sync::Mutex, time::sleep};
     use uuid::Uuid;
 
@@ -72,7 +64,7 @@ RZb6vjD6zPWZElSkrwGczDM=
 -----END PRIVATE KEY-----
 ";
 
-    const CA_CERT: &[u8] = b"-----BEGIN CERTIFICATE-----
+    const _CA_CERT: &[u8] = b"-----BEGIN CERTIFICATE-----
 MIIDGzCCAgOgAwIBAgIUVlpyalwiQIyyrcHPGXGm+1fEPMIwDQYJKoZIhvcNAQEL
 BQAwHTELMAkGA1UEBhMCRkkxDjAMBgNVBAMMBXZhaGlkMB4XDTI0MTIwMTIwMjEy
 NVoXDTI5MTEzMDIwMjEyNVowHTELMAkGA1UEBhMCRkkxDjAMBgNVBAMMBXZhaGlk
@@ -93,11 +85,19 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
 -----END CERTIFICATE-----
 ";
 
-    pub fn before_all() {
-        info!("Timeout is {}s", TIMEOUT_DURATION);
+    #[macro_export]
+    macro_rules! test {
+        ( $x:expr ) => {{
+            $x.timeout(Duration::from_secs(TIMEOUT_DURATION)).await?
+        }};
     }
 
-    const TIMEOUT_DURATION: u64 = 30;
+    pub fn before_all() {
+        tracing::init(Some("(spacebuild.*)".to_string()));
+        spacebuild_log!(info, "tests", "Timeout is {}s", TIMEOUT_DURATION);
+    }
+
+    const TIMEOUT_DURATION: u64 = 20;
 
     pub fn get_random_db_path() -> String {
         format!(
@@ -116,9 +116,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         tokio::task::JoinHandle<spacebuild::Result<()>>,
         u16,
     )> {
-        let listener = TcpListener::bind("localhost:0")
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
+        let listener = test!(TcpListener::bind("localhost:0"))?;
         let addr = listener.local_addr()?;
         let port = addr.port();
 
@@ -139,574 +137,266 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
             None
         };
         let (send_stop, recv_stop) = crossbeam::channel::bounded(1);
-        let game_thread: tokio::task::JoinHandle<spacebuild::Result<()>> =
-            tokio::spawn(async move {
-                server::run(
-                    server::InstanceConfig::UserInstance(instance_cln),
-                    server::ServerConfig {
-                        tcp: server::TcpConfig::TcpListener(listener),
-                        pki,
-                    },
-                    recv_stop,
-                )
-                .await?;
-                Ok(())
-            });
+        let game_thread: tokio::task::JoinHandle<spacebuild::Result<()>> = tokio::spawn(async move {
+            server::run(
+                server::InstanceConfig::UserInstance(instance_cln),
+                server::ServerConfig {
+                    tcp: server::TcpConfig::TcpListener(listener),
+                    pki,
+                },
+                recv_stop,
+            )
+            .await?;
+            Ok(())
+        });
 
         Ok((instance, send_stop, game_thread, port))
     }
 
-    #[tokio::test]
-    async fn case_01_connection() -> anyhow::Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_01_connect() -> anyhow::Result<()> {
         let db_path = get_random_db_path();
-
-        let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        Client::connect(format!("localhost:{}", port).as_str(), None)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let _client = test!(bot::connect_plain("localhost", port));
         send_stop.send(())?;
-
-        game_thread
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await???;
-
+        test!(game_thread)??;
         Ok(())
     }
 
-    #[tokio::test]
-    async fn case_02_double_connection() -> anyhow::Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_02_connect_terminate() -> anyhow::Result<()> {
         let db_path = get_random_db_path();
-
-        let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        let _ = Client::connect(format!("localhost:{}", port).as_str(), None)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        Client::connect(format!("localhost:{}", port).as_str(), None)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client = test!(bot::connect_plain("localhost", port))?;
+        test!(client.terminate())?;
         send_stop.send(())?;
-
-        game_thread
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await???;
-
+        test!(game_thread)??;
         Ok(())
     }
 
-    #[tokio::test]
-    async fn case_03_successful_first_authentication() -> anyhow::Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_03_connect_connect() -> anyhow::Result<()> {
         let db_path = get_random_db_path();
-
-        let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        player
-            .login("test")
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        player.terminate().await?;
-
-        sleep(tokio::time::Duration::from_millis(1500)).await;
-
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let _client1 = test!(bot::connect_plain("localhost", port));
+        let _client2 = test!(bot::connect_plain("localhost", port));
         send_stop.send(())?;
-
-        game_thread
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await???;
-
+        test!(game_thread)??;
         Ok(())
     }
 
-    #[tokio::test]
-    async fn case_04_successful_first_authentication_tls() -> anyhow::Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_04_connect_terminate_connect() -> anyhow::Result<()> {
         let db_path = get_random_db_path();
-
-        let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, true)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        let mut player = Client::connect(
-            format!("localhost:{}", port).as_str(),
-            Some(ClientPki::Slice { cert: CA_CERT }),
-        )
-        .timeout(Duration::from_secs(TIMEOUT_DURATION))
-        .await??;
-
-        player
-            .login("test")
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        player.terminate().await?;
-
-        sleep(tokio::time::Duration::from_millis(1500)).await;
-
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client1 = test!(bot::connect_plain("localhost", port))?;
+        test!(client1.terminate())?;
+        let _client2 = test!(bot::connect_plain("localhost", port));
         send_stop.send(())?;
-
-        game_thread
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await???;
-
+        test!(game_thread)??;
         Ok(())
     }
 
-    // #[tokio::test]
-    // async fn case_05_known_player_authentication() -> anyhow::Result<()> {
-    //     let db_path = get_random_db_path();
-
-    //     {
-    //         File::create(db_path.clone())?;
-
-    //         let mut instance = Instance::from_path(db_path.as_str())
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-
-    //         instance.borrow_galaxy_mut().(CelestialBody::new(
-    //             0,
-    //             Id::MAX,
-    //             Vector3::default(),
-    //             Vector3::default(),
-    //             0f64,
-    //             0f64,
-    //             0f64,
-    //             Id::MAX,
-    //             Entity::Player(Player::new(0, "test963".to_string())),
-    //         ));
-
-    //         instance
-    //             .sync_and_save()
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-    //     }
-
-    //     let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await??;
-
-    //     let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await??;
-
-    //     player
-    //         .login("test")
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await??;
-
-    //     send_stop.send(())?;
-
-    //     game_thread
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await???;
-
-    //     Ok(())
-    // }
-
-    #[tokio::test]
-    async fn case_06_double_authentication() -> anyhow::Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_05_connect_connect_terminate_terminate() -> anyhow::Result<()> {
         let db_path = get_random_db_path();
-
-        let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        assert!(player.login("test").await.is_ok());
-
-        assert!(player.login("test").await.is_err());
-
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client1 = test!(bot::connect_plain("localhost", port))?;
+        let mut client2 = test!(bot::connect_plain("localhost", port))?;
+        test!(client1.terminate())?;
+        test!(client2.terminate())?;
         send_stop.send(())?;
-
-        game_thread
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await???;
-
+        test!(game_thread)??;
         Ok(())
     }
 
-    #[tokio::test]
-    async fn case_07_auth_reauth() -> anyhow::Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_06_login() -> anyhow::Result<()> {
         let db_path = get_random_db_path();
-
-        let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        let uuid1;
-        {
-            let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-            uuid1 = player
-                .login("test")
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-            player
-                .terminate()
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-        }
-
-        let uuid2;
-        {
-            let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-            uuid2 = player
-                .login("test")
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-            player
-                .terminate()
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-        }
-
-        assert_eq!(uuid1, uuid2);
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client = test!(bot::connect_plain("localhost", port))?;
+        test!(client.login("test213"))?;
         send_stop.send(())?;
-
-        game_thread
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await???;
-
+        test!(game_thread)??;
         Ok(())
     }
 
-    #[tokio::test]
-    async fn case_08_wait_first_gameinfo() -> anyhow::Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_07_login_terminate() -> anyhow::Result<()> {
         let db_path = get_random_db_path();
-
-        let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-        player
-            .login("test")
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        let game_info = player
-            .next_game_info()
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await
-            .map_err(|_| anyhow!("Waited first game info for too long"))?;
-
-        if let GameInfo::Player(_player_info) = game_info.unwrap() {
-        } else {
-            assert!(false)
-        }
-
-        player
-            .terminate()
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await
-            .map_err(|_| anyhow!("Waited for client to terminate for too long"))??;
-
-        send_stop.send(()).unwrap();
-
-        game_thread
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await
-            .map_err(|_| anyhow!("Waited for server to terminate for too long"))???;
-
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client = test!(bot::connect_plain("localhost", port))?;
+        test!(client.login("test213"))?;
+        test!(client.terminate())?;
+        send_stop.send(())?;
+        test!(game_thread)??;
         Ok(())
     }
 
-    #[tokio::test]
-    async fn case_09_auth_stop_auth() -> anyhow::Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_08_login_login() -> anyhow::Result<()> {
         let db_path = get_random_db_path();
-
-        log::info!("db: {}", db_path);
-
-        let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
-
-        let uuid1;
-        {
-            let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-            uuid1 = player
-                .login("test")
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-            player
-                .terminate()
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-        }
-
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client = test!(bot::connect_plain("localhost", port))?;
+        test!(client.login("test123"))?;
+        let mut client2 = test!(bot::connect_plain("localhost", port))?;
+        test!(client2.login("test456"))?;
         send_stop.send(())?;
-        game_thread
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await???;
+        test!(game_thread)??;
+        Ok(())
+    }
 
-        let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await??;
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_09_login_terminate_login() -> anyhow::Result<()> {
+        let db_path = get_random_db_path();
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client = test!(bot::connect_plain("localhost", port))?;
+        let id = test!(client.login("test123"))?;
+        test!(client.terminate())?;
+        tokio::time::sleep(*Duration::from_millis(1000)).await;
+        let mut client2 = test!(bot::connect_plain("localhost", port))?;
+        tokio::time::sleep(*Duration::from_millis(2000)).await;
+        let id_later = test!(client2.login("test123"))?;
+        tokio::time::sleep(*Duration::from_millis(2000)).await;
+        assert_eq!(id, id_later);
+        test!(client2.terminate())?;
+        send_stop.send(())?;
+        test!(game_thread)??;
+        Ok(())
+    }
 
-        let uuid2;
-        {
-            let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
-            uuid2 = player
-                .login("test")
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_10_first_game_info() -> anyhow::Result<()> {
+        let db_path = get_random_db_path();
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client = test!(bot::connect_plain("localhost", port))?;
+        test!(client.login("test213"))?;
+        let _game_info = test!(client.next_game_info())?;
+        send_stop.send(())?;
+        test!(game_thread)??;
+        Ok(())
+    }
 
-            let game_info = player
-                .next_game_info()
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await
-                .map_err(|_| anyhow!("Waited first game info for too long"))?;
-
-            if let GameInfo::Player(_player_info) = game_info.unwrap() {
-            } else {
-                assert!(false)
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_11_test_first_game_info() -> anyhow::Result<()> {
+        let db_path = get_random_db_path();
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client = test!(bot::connect_plain("localhost", port))?;
+        test!(client.login("test213"))?;
+        let game_info = test!(client.next_game_info())?;
+        match game_info {
+            Game::Player(player_info) => {
+                assert!(player_info.coords[0].is_normal());
+                assert!(player_info.coords[1].is_normal());
+                assert!(player_info.coords[2].is_normal());
             }
-
-            player
-                .terminate()
-                .timeout(Duration::from_secs(TIMEOUT_DURATION))
-                .await??;
+            _ => assert!(false),
         }
-
         send_stop.send(())?;
-        game_thread
-            .timeout(Duration::from_secs(TIMEOUT_DURATION))
-            .await???;
-
-        assert_eq!(uuid1, uuid2);
-
+        test!(game_thread)??;
         Ok(())
     }
 
-    // #[tokio::test]
-    // async fn case_10_auth_move_leave() -> anyhow::Result<()> {
-    //     let db_path = get_random_db_path();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_12_move_1() -> anyhow::Result<()> {
+        let db_path = get_random_db_path();
+        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
+        let mut client = test!(bot::connect_plain("localhost", port))?;
+        test!(client.login("test213"))?;
+        let game_info = test!(client.next_game_info())?;
+        let coords = match game_info {
+            Game::Player(player_info) => {
+                assert!(player_info.coords[0].is_normal());
+                assert!(player_info.coords[1].is_normal());
+                assert!(player_info.coords[2].is_normal());
+                player_info.coords
+            }
+            _ => unreachable!(),
+        };
+        let game_info = test!(client.next_game_info())?;
+        match game_info {
+            Game::Env(_bodies) => {}
+            _ => unreachable!(),
+        }
 
-    //     log::info!("db: {}", db_path);
+        sleep(*Duration::from_millis(500)).await;
 
-    //     let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await??;
+        test!(client.move_in_space(Cartesian { x: 0., y: 0., z: 1. }))?;
 
-    //     {
-    //         let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-    //         player
-    //             .login("test")
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
+        let mut i = 0;
+        let coords_later = loop {
+            if let Game::Player(player_info) = test!(client.next_game_info())? {
+                assert!(player_info.coords[0].is_normal());
+                assert!(player_info.coords[1].is_normal());
+                assert!(player_info.coords[2].is_normal());
+                break player_info.coords;
+            } else {
+                i = i + 1;
+                if i > 1000 {
+                    break [0.; 3];
+                }
+            }
+        };
+        assert!(i > 0);
+        assert!(i < 1000);
+        assert_eq!(coords_later[0], coords[0]);
+        assert_eq!(coords_later[1], coords[1]);
+        assert!(coords_later[2] > coords[2]);
+        send_stop.send(())?;
+        test!(game_thread)??;
+        Ok(())
+    }
 
-    //         let game_info = player
-    //             .next_game_info()
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
+    #[tokio::test(flavor = "multi_thread")]
+    async fn case_13_move_2() -> anyhow::Result<()> {
+        let db_path = get_random_db_path();
+        let (_, send_stop, game_thread, port) = bootstrap(&db_path, false).await?;
+        let mut client = bot::connect_plain("localhost", port).await?;
+        client.login("test213").await?;
+        let game_info = client.next_game_info().await?;
 
-    //         if let GameInfo::Player(player_info) = game_info {
-    //             player_info.coords
-    //         } else {
-    //             unreachable!()
-    //         };
+        let mut coords = if let Game::Player(player_info) = game_info {
+            player_info.coords
+        } else {
+            unreachable!();
+        };
+        {
+            let mut direction = Cartesian::default();
+            direction.x = 1.;
+            client.move_in_space(direction).await?;
 
-    //         let game_info = player
-    //             .next_game_info()
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
+            let coords_later = client.until_player_info().await?.coords;
 
-    //         if let GameInfo::BodiesInSystem(_) = game_info {
-    //         } else {
-    //             unreachable!()
-    //         }
+            assert!(coords_later[0] > coords[0]);
+            assert_eq!(coords_later[1], coords[1]);
+            assert_eq!(coords_later[2], coords[2]);
+            coords = coords_later;
+        }
+        {
+            let mut direction = Cartesian::default();
+            direction.y = 1.;
+            client.move_in_space(direction).await?;
 
-    //         let last_coords = tokio::spawn(async move {
-    //             let mut coords = [0f64, 0f64, 0f64];
-    //             for _ in 0..10 {
-    //                 player
-    //                     .move_in_space(Vector3::from(0, 0, 1))
-    //                     .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //                     .await??;
-    //                 let player_info = player
-    //                     .until_player_info()
-    //                     .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //                     .await??;
-    //                 coords = player_info.coords;
-    //                 sleep(tokio::time::Duration::from_millis(250)).await;
-    //             }
+            let coords_later = client.until_player_info().await?.coords;
 
-    //             player
-    //                 .terminate()
-    //                 .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //                 .await??;
-    //             anyhow::Ok(coords)
-    //         })
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await???;
+            assert_eq!(coords_later[0], coords[0]);
+            assert!(coords_later[1] > coords[1]);
+            assert_eq!(coords_later[2], coords[2]);
+            coords = coords_later;
+        }
+        {
+            let mut direction = Cartesian::default();
+            direction.z = 1.;
+            client.move_in_space(direction).await?;
 
-    //         log::info!("Last coords before leave: {:?}", last_coords);
-    //     }
+            let coords_later = client.until_player_info().await?.coords;
 
-    //     sleep(tokio::time::Duration::from_millis(2000)).await;
-
-    //     {
-    //         let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-    //         player
-    //             .login("test")
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-
-    //         let game_info = player
-    //             .next_game_info()
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-
-    //         let coords = if let GameInfo::Player(player_info) = game_info {
-    //             player_info.coords
-    //         } else {
-    //             unreachable!()
-    //         };
-
-    //         log::info!("First coords after rejoin: {:?}", coords);
-    //     }
-
-    //     send_stop.send(())?;
-    //     game_thread
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await???;
-
-    //     Ok(())
-    // }
-
-    // #[tokio::test]
-    // async fn case_11_auth_move_shutdown() -> anyhow::Result<()> {
-    //     let db_path = get_random_db_path();
-
-    //     log::info!("db: {}", db_path);
-
-    //     let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await??;
-
-    //     {
-    //         let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-    //         player
-    //             .login("test")
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-
-    //         let game_info = player
-    //             .next_game_info()
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-
-    //         if let GameInfo::Player(player_info) = game_info {
-    //             player_info.coords
-    //         } else {
-    //             unreachable!()
-    //         };
-
-    //         let game_info = player
-    //             .next_game_info()
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-
-    //         if let GameInfo::BodiesInSystem(_) = game_info {
-    //         } else {
-    //             unreachable!()
-    //         }
-
-    //         let last_coords = tokio::spawn(async move {
-    //             let mut coords = [0f64, 0f64, 0f64];
-    //             for _ in 0..10 {
-    //                 player
-    //                     .move_in_space(Vector3::from(0, 0, 1))
-    //                     .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //                     .await??;
-    //                 let player_info = player
-    //                     .until_player_info()
-    //                     .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //                     .await??;
-    //                 coords = player_info.coords;
-    //                 sleep(tokio::time::Duration::from_millis(250)).await;
-    //             }
-
-    //             player
-    //                 .terminate()
-    //                 .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //                 .await??;
-    //             anyhow::Ok(coords)
-    //         })
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await???;
-
-    //         log::info!("Last coords before leave: {:?}", last_coords);
-    //     }
-
-    //     send_stop.send(())?;
-    //     game_thread
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await???;
-
-    //     let (_instance, send_stop, game_thread, port) = bootstrap(&db_path, false)
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await??;
-
-    //     {
-    //         let mut player = Client::connect(format!("localhost:{}", port).as_str(), None)
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-    //         player
-    //             .login("test")
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-
-    //         let game_info = player
-    //             .next_game_info()
-    //             .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //             .await??;
-
-    //         let coords = if let GameInfo::Player(player_info) = game_info {
-    //             player_info.coords
-    //         } else {
-    //             unreachable!()
-    //         };
-
-    //         log::info!("First coords after rejoin: {:?}", coords);
-    //     }
-
-    //     send_stop.send(())?;
-    //     game_thread
-    //         .timeout(Duration::from_secs(TIMEOUT_DURATION))
-    //         .await???;
-
-    //     Ok(())
-    // }
+            assert_eq!(coords_later[0], coords[0]);
+            assert_eq!(coords_later[1], coords[1]);
+            assert!(coords_later[2] > coords[2]);
+        }
+        send_stop.send(())?;
+        test!(game_thread)??;
+        Ok(())
+    }
 }

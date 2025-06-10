@@ -5,7 +5,11 @@ use std::time::Duration;
 use clap::Parser;
 
 use anyhow::Result;
-use spacebuild::{client::Client, network::tls::ClientPki};
+use spacebuild::{
+    bot::{self, Bot},
+    tls::ClientPki,
+};
+use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
 
 #[derive(Parser, Debug)]
@@ -27,15 +31,11 @@ struct Args {
     #[arg(long, default_value = "spacebuild::(.*)", value_name = "REGEX")]
     trace_filter: String,
 
-    #[arg(
-        long,
-        default_value = "INFO",
-        value_name = "TRACE|DEBUG|INFO|WARN|ERROR"
-    )]
+    #[arg(long, default_value = "INFO", value_name = "TRACE|DEBUG|INFO|WARN|ERROR")]
     trace_level: String,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -59,15 +59,11 @@ async fn main() -> Result<()> {
 
         let pki = pki.clone();
         handles.push(tokio::spawn(async move {
-            let mut player =
-                Client::connect(format!("{}:{}", host, args.port).as_str(), pki).await?;
-
-            let new_v4 = Uuid::new_v4();
-            player.login(new_v4.to_string().as_str()).await?;
-
-            tokio::time::sleep(Duration::from_secs(10)).await;
-
-            player.terminate().await?;
+            if let Some(pki) = pki {
+                run(bot::connect_secure(host.as_str(), args.port, pki).await?).await?;
+            } else {
+                run(bot::connect_plain(host.as_str(), args.port).await?).await?;
+            };
 
             anyhow::Ok(())
         }));
@@ -76,5 +72,16 @@ async fn main() -> Result<()> {
     for handle in handles {
         handle.await.unwrap()?;
     }
+    Ok(())
+}
+
+async fn run<S: AsyncRead + AsyncWrite + Unpin>(mut client: Bot<S>) -> Result<()> {
+    let new_v4 = Uuid::new_v4();
+    client.login(new_v4.to_string().as_str()).await?;
+
+    tokio::time::sleep(Duration::from_secs(10)).await;
+
+    client.terminate().await?;
+
     Ok(())
 }

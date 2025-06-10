@@ -26,10 +26,8 @@ pub enum ClientPki<'a> {
 pub fn get_acceptor(pki: ServerPki) -> Result<TlsAcceptor> {
     match pki {
         ServerPki::Slices { key, cert } => {
-            let cert =
-                CertificateDer::from_pem_slice(cert).map_err(|err| Error::CertLoadError(err))?;
-            let key =
-                PrivatePkcs8KeyDer::from_pem_slice(key).map_err(|err| Error::KeyLoadError(err))?;
+            let cert = CertificateDer::from_pem_slice(cert).map_err(|err| Error::CertLoadError(err))?;
+            let key = PrivatePkcs8KeyDer::from_pem_slice(key).map_err(|err| Error::KeyLoadError(err))?;
 
             let config = rustls::ServerConfig::builder()
                 .with_no_client_auth()
@@ -41,10 +39,8 @@ pub fn get_acceptor(pki: ServerPki) -> Result<TlsAcceptor> {
             key: key_path,
             cert: cert_path,
         } => {
-            let cert = CertificateDer::from_pem_file(cert_path)
-                .map_err(|err| Error::CertLoadError(err))?;
-            let key = PrivatePkcs8KeyDer::from_pem_file(key_path)
-                .map_err(|err| Error::KeyLoadError(err))?;
+            let cert = CertificateDer::from_pem_file(cert_path).map_err(|err| Error::CertLoadError(err))?;
+            let key = PrivatePkcs8KeyDer::from_pem_file(key_path).map_err(|err| Error::KeyLoadError(err))?;
 
             let config = rustls::ServerConfig::builder()
                 .with_no_client_auth()
@@ -60,9 +56,7 @@ pub fn get_connector(pki: ClientPki) -> Result<TlsConnector> {
     match pki {
         ClientPki::Slice { cert } => {
             let mut root_store = RootCertStore::empty();
-            root_store.add_parsable_certificates(
-                CertificateDer::pem_slice_iter(cert).map(|result| result.unwrap()),
-            );
+            root_store.add_parsable_certificates(CertificateDer::pem_slice_iter(cert).map(|result| result.unwrap()));
 
             let config = rustls::ClientConfig::builder()
                 .with_root_certificates(Arc::new(root_store))
