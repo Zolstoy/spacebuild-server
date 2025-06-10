@@ -12,18 +12,19 @@ use ratatui::{
     text::Text,
     widgets::{
         canvas::{Canvas, Circle, Points},
-        Block, Borders, Cell, HighlightSpacing, Row, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, Table, TableState,
+        Block, Borders, Cell, HighlightSpacing, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table,
+        TableState,
     },
     DefaultTerminal, Frame,
 };
 use spacebuild::{
-    client::Client,
+    bot::{self, Bot},
     network::tls::ClientPki,
     protocol::{BodyInfo, GameInfo},
     Id,
 };
 use std::{collections::HashMap, time::Duration};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 #[derive(Parser, Debug)]
 #[command(version, long_about = None)]
@@ -42,8 +43,8 @@ struct Args {
     tls: Option<Option<String>>,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let pki = if let Some(tls) = args.tls {
@@ -56,17 +57,24 @@ async fn main() -> Result<()> {
         None
     };
 
-    println!("Connecting to {}:{}", args.host, args.port);
-    let mut client = Client::connect(format!("{}:{}", args.host, args.port).as_str(), pki).await?;
+    let app_result = if let Some(pki) = pki {
+        run(bot::connect_secure(args.host.as_str(), args.port, pki).await?).await
+    } else {
+        run(bot::connect_plain(args.host.as_str(), args.port).await?).await
+    };
+    ratatui::restore();
+    app_result
+}
 
+async fn run<S: AsyncRead + AsyncWrite + Unpin>(mut client: Bot<S>) -> Result<()> {
     println!("Logging in as observer");
     client.login("observer").await?;
 
     print!("Running app");
     let terminal = ratatui::init();
-    let app_result = App::default().run(terminal, client).await;
-    ratatui::restore();
-    app_result
+
+    App::default().run(terminal, client).await?;
+    Ok(())
 }
 
 #[derive(Debug, Default)]
@@ -88,14 +96,16 @@ struct App {
 impl App {
     const FRAMES_PER_SECOND: f32 = 60.0;
 
-    pub async fn run(mut self, mut terminal: DefaultTerminal, mut client: Client) -> Result<()> {
+    pub async fn run<S: AsyncRead + AsyncWrite + Unpin>(
+        mut self,
+        mut terminal: DefaultTerminal,
+        mut client: Bot<S>,
+    ) -> Result<()> {
         let period = Duration::from_secs_f32(1.0 / Self::FRAMES_PER_SECOND);
         let mut interval = tokio::time::interval(period);
         let mut events = EventStream::new();
         self.draw_zoom = 500.0;
-        std::io::stdout()
-            .execute(crossterm::event::EnableMouseCapture)
-            .unwrap();
+        std::io::stdout().execute(crossterm::event::EnableMouseCapture).unwrap();
 
         while !self.should_quit {
             tokio::select! {
@@ -118,7 +128,7 @@ impl App {
                                 self.celestials.insert(body.id, body);
                             }
                         },
-                        _ => {}
+                        // _ => {}
                     }
                 }
             }
@@ -170,18 +180,9 @@ impl App {
             let mut cells = vec![];
             cells.push(Cell::from(Text::from(format!("{}", data.0))));
             cells.push(Cell::from(Text::from(data.1.element_type.clone())));
-            cells.push(Cell::from(Text::from(format!(
-                "{}",
-                data.1.coords[0] as i32
-            ))));
-            cells.push(Cell::from(Text::from(format!(
-                "{}",
-                data.1.coords[1] as i32
-            ))));
-            cells.push(Cell::from(Text::from(format!(
-                "{}",
-                data.1.coords[2] as i32
-            ))));
+            cells.push(Cell::from(Text::from(format!("{}", data.1.coords[0] as i32))));
+            cells.push(Cell::from(Text::from(format!("{}", data.1.coords[1] as i32))));
+            cells.push(Cell::from(Text::from(format!("{}", data.1.coords[2] as i32))));
             if self.list_clicked && self.nb_row_clicked as usize + self.list_scroll as usize == i {
                 Row::new(cells).style(Style::new().fg(Color::Black).bg(Color::White))
             } else {
@@ -207,12 +208,7 @@ impl App {
                 .border_style(Style::new().fg(Color::White)),
         )
         .header(header)
-        .highlight_symbol(Text::from(vec![
-            "".into(),
-            bar.into(),
-            bar.into(),
-            "".into(),
-        ]))
+        .highlight_symbol(Text::from(vec!["".into(), bar.into(), bar.into(), "".into()]))
         .highlight_spacing(HighlightSpacing::Always);
         f.render_stateful_widget(
             celestials_table,
@@ -224,8 +220,7 @@ impl App {
             .begin_symbol(Some("↑"))
             .end_symbol(Some("↓"));
 
-        let mut scrollbar_state =
-            ScrollbarState::new(self.celestials.len()).position(self.list_scroll);
+        let mut scrollbar_state = ScrollbarState::new(self.celestials.len()).position(self.list_scroll);
 
         f.render_stateful_widget(
             scrollbar,
@@ -238,14 +233,8 @@ impl App {
 
         if self.star.id != Id::default() {
             let cln = self.celestials.clone();
-            let mut x_bounds = [
-                -(self.draw_area.width as f64) / 2.,
-                self.draw_area.width as f64 / 2.,
-            ];
-            let mut y_bounds = [
-                -(self.draw_area.height as f64),
-                self.draw_area.height as f64,
-            ];
+            let mut x_bounds = [-(self.draw_area.width as f64) / 2., self.draw_area.width as f64 / 2.];
+            let mut y_bounds = [-(self.draw_area.height as f64), self.draw_area.height as f64];
 
             x_bounds[0] += self.offset.0;
             x_bounds[1] += self.offset.0;
@@ -346,8 +335,7 @@ impl App {
                             .contains(Position::new(event.column, event.row))
                         {
                             self.list_clicked = true;
-                            self.nb_row_clicked =
-                                event.row - self.list_area.y - 1 + self.list_scroll as u16;
+                            self.nb_row_clicked = event.row - self.list_area.y - 1 + self.list_scroll as u16;
                         }
                         self.left_button_down = true;
                     }
@@ -404,18 +392,12 @@ impl App {
                     }
                 }
                 MouseEventKind::ScrollDown => {
-                    if self
-                        .draw_area
-                        .contains(Position::new(event.column, event.row))
-                    {
+                    if self.draw_area.contains(Position::new(event.column, event.row)) {
                         if self.draw_zoom <= 1000. {
                             self.draw_zoom += 10.;
                         }
                     }
-                    if self
-                        .list_area
-                        .contains(Position::new(event.column, event.row))
-                    {
+                    if self.list_area.contains(Position::new(event.column, event.row)) {
                         self.list_scroll += 1;
                         if self.list_scroll >= self.celestials.len() {
                             self.list_scroll = self.celestials.len().saturating_sub(1);

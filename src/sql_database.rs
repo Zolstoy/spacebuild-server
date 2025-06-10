@@ -8,12 +8,7 @@ pub struct SqlDatabase {
 }
 
 impl SqlDatabase {
-    pub async fn create_table(
-        &mut self,
-        name: &str,
-        entries: Vec<&str>,
-        indexes: Vec<&str>,
-    ) -> Result<()> {
+    pub async fn create_table(&mut self, name: &str, entries: Vec<&str>, indexes: Vec<&str>) -> Result<()> {
         if self
             .select_from_where_equals("sqlite_master ", "name", name)
             .await?
@@ -36,16 +31,10 @@ impl SqlDatabase {
             .map_err(|err| Error::DbCreateTableError(name.to_string(), err))?;
 
         for index in indexes {
-            sqlx::query(
-                format!(
-                    "CREATE INDEX {}_index_{} ON {} ({})",
-                    index, name, name, index
-                )
-                .as_str(),
-            )
-            .execute(&self.pool)
-            .await
-            .map_err(|err| Error::DbCreateTableError(name.to_string(), err))?;
+            sqlx::query(format!("CREATE INDEX {}_index_{} ON {} ({})", index, name, name, index).as_str())
+                .execute(&self.pool)
+                .await
+                .map_err(|err| Error::DbCreateTableError(name.to_string(), err))?;
         }
         Ok(())
     }
@@ -55,18 +44,13 @@ impl SqlDatabase {
         column_name: &str,
         value: &str,
     ) -> Result<Vec<SqliteRow>> {
-        let rows =
-            sqlx::query(format!("SELECT * FROM {} WHERE {}=?", table_name, column_name).as_str())
-                .bind(value)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|err| {
-                    Error::DbSelectFromWhereError(
-                        table_name.to_string(),
-                        format!("{}={}", column_name, value),
-                        err,
-                    )
-                })?;
+        let rows = sqlx::query(format!("SELECT * FROM {} WHERE {}=?", table_name, column_name).as_str())
+            .bind(value)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|err| {
+                Error::DbSelectFromWhereError(table_name.to_string(), format!("{}={}", column_name, value), err)
+            })?;
 
         Ok(rows)
     }
@@ -97,12 +81,7 @@ impl SqlDatabase {
         let rows = sqlx::query(
             format!(
                 "SELECT {} FROM {} INNER JOIN {} ON {} = {} WHERE {}=?",
-                select_part,
-                first_table_name,
-                second_table_name,
-                join_left,
-                join_right,
-                where_column_name
+                select_part, first_table_name, second_table_name, join_left, join_right, where_column_name
             )
             .as_str(),
         )
@@ -121,11 +100,7 @@ impl SqlDatabase {
         Ok(rows)
     }
 
-    fn vec_to_insert_str(
-        table_name: &str,
-        values: Vec<Vec<String>>,
-        upserts: Vec<(&str, &str)>,
-    ) -> String {
+    fn vec_to_insert_str(table_name: &str, values: Vec<Vec<String>>, upserts: Vec<(&str, &str)>) -> String {
         let mut insert_sql_str = format!("INSERT INTO {} VALUES ", table_name);
 
         for line in values {

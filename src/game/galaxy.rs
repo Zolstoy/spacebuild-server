@@ -1,11 +1,9 @@
-use core::f64;
-use std::f64::consts::PI;
-
-use super::repr::Vector3;
 use super::{celestial_body::CelestialBody, entity::Entity};
-use crate::Id;
+use crate::{spacebuild_log, Id};
+use core::f64;
 use rstar::{RTree, AABB};
-use scilib::coordinate::spherical::Spherical;
+use scilib::coordinate::{cartesian::Cartesian, spherical::Spherical};
+use std::f64::consts::PI;
 
 #[derive(Default)]
 pub struct Galaxy {
@@ -13,6 +11,10 @@ pub struct Galaxy {
 }
 
 impl Galaxy {
+    pub fn insert_celestial(&mut self, celestial: CelestialBody) {
+        self.celestials.insert(celestial);
+    }
+
     pub fn borrow_bodies(&self) -> Vec<&CelestialBody> {
         self.celestials.iter().collect()
     }
@@ -25,23 +27,18 @@ impl Galaxy {
         self.celestials.iter_mut().find(|g| g.id == id)
     }
 
-    pub fn _remove_by_id(&mut self, id: Id) -> Option<CelestialBody> {
-        self.celestials.remove(&CelestialBody::dummy(id))
-    }
+    // pub fn _remove_by_id(&mut self, id: Id) -> Option<CelestialBody> {
+    //     self.celestials.remove(&CelestialBody::dummy(id))
+    // }
 
-    fn galactics_in_spherical_view(
-        tree: &RTree<CelestialBody>,
-        center: Vector3,
-        radius: f64,
-    ) -> Vec<&CelestialBody> {
+    fn galactics_in_spherical_view(tree: &RTree<CelestialBody>, center: Cartesian, radius: f64) -> Vec<&CelestialBody> {
         let radius_sq = radius * radius;
         let min = [center.x - radius, center.y - radius, center.z - radius];
         let max = [center.x + radius, center.y + radius, center.z + radius];
         tree.locate_in_envelope_intersecting(&AABB::from_corners(min, max))
             .filter(|g| {
-                let d_sq = (g.coords.x - center.x).powi(2)
-                    + (g.coords.y - center.y).powi(2)
-                    + (g.coords.z - center.z).powi(2);
+                let d_sq =
+                    (g.coords.x - center.x).powi(2) + (g.coords.y - center.y).powi(2) + (g.coords.z - center.z).powi(2);
                 d_sq <= radius_sq
             })
             .collect()
@@ -66,9 +63,8 @@ impl Galaxy {
             if let Entity::Player(player) = &mut celestial.entity {
                 let env = Self::galactics_in_spherical_view(&old_rtree, celestial.coords, 10000f64);
 
-                let (coords, direction, _speed) = player
-                    .update(celestial.coords, celestial.local_speed, delta, env)
-                    .await;
+                let (coords, direction, _speed) =
+                    player.update(celestial.coords, celestial.local_speed, delta, env).await;
 
                 celestial.coords = coords;
                 celestial.local_direction = direction;
@@ -76,17 +72,15 @@ impl Galaxy {
                 let local_coordinates_car = celestial.coords - gravity_center.coords;
                 let local_coordinates_sph = Spherical::from_coord(local_coordinates_car);
                 let mut new_coordinates_sph = local_coordinates_sph.clone();
-                new_coordinates_sph.phi =
-                    new_coordinates_sph.phi + celestial.rotating_speed * delta;
+                new_coordinates_sph.phi = new_coordinates_sph.phi + celestial.rotating_speed * delta;
 
                 new_coordinates_sph.phi %= PI;
 
-                let delta_car = Vector3::from_coord(new_coordinates_sph)
-                    - Vector3::from_coord(local_coordinates_sph);
+                let delta_car =
+                    Cartesian::from_coord(new_coordinates_sph) - Cartesian::from_coord(local_coordinates_sph);
 
-                if !delta_car.x.is_normal() || !delta_car.y.is_normal() || !delta_car.z.is_normal()
-                {
-                    // log::error!("NUMBER NOT NORMAL")
+                if !delta_car.x.is_normal() || !delta_car.y.is_normal() || !delta_car.z.is_normal() {
+                    spacebuild_log!(warn, "galaxy", "NUMBER NOT NORMAL");
                 } else {
                     celestial.coords += delta_car;
 

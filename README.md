@@ -1,5 +1,6 @@
 # Space Build
+[![Build & Test Linux](https://github.com/Zolstoy/spacebuild-server/actions/workflows/linux.yml/badge.svg)](https://github.com/Zolstoy/spacebuild-server/actions/workflows/linux.yml)
 
-[![Build & Tests](https://github.com/neotene/spacebuild/actions/workflows/dev.yml/badge.svg?branch=dev)](https://github.com/neotene/spacebuild/actions/workflows/dev.yml)
+[![Build & Test Windows](https://github.com/Zolstoy/spacebuild-server/actions/workflows/windows.yml/badge.svg)](https://github.com/Zolstoy/spacebuild-server/actions/workflows/windows.yml)
 
-[![Siege & Publish](https://github.com/neotene/spacebuild/actions/workflows/release.yml/badge.svg)](https://github.com/neotene/spacebuild/actions/workflows/release.yml)
+[![Build & Test MacOS](https://github.com/Zolstoy/spacebuild-server/actions/workflows/macos.yml/badge.svg)](https://github.com/Zolstoy/spacebuild-server/actions/workflows/macos.yml)

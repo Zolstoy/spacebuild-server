@@ -1,17 +1,15 @@
 use crate::Id;
 
-use super::{
-    entity::{asteroid::Asteroid, Entity},
-    repr::Vector3,
-};
+use super::entity::Entity;
 use rstar::{RTreeObject, AABB};
+use scilib::coordinate::cartesian::Cartesian;
 
 #[derive(Clone, Debug)]
 pub struct CelestialBody {
     pub(crate) id: Id,
     pub(crate) owner: Id,
-    pub(crate) coords: Vector3,
-    pub(crate) local_direction: Vector3,
+    pub(crate) coords: Cartesian,
+    pub(crate) local_direction: Cartesian,
     pub(crate) local_speed: f64,
     pub(crate) angular_speed: f64,
     pub(crate) rotating_speed: f64,
@@ -41,11 +39,11 @@ impl CelestialBody {
         self.id
     }
 
-    pub fn get_coords(&self) -> Vector3 {
+    pub fn get_coords(&self) -> Cartesian {
         self.coords.clone()
     }
 
-    pub fn get_direction(&self) -> Vector3 {
+    pub fn get_direction(&self) -> Cartesian {
         self.local_direction
     }
 
@@ -60,8 +58,8 @@ impl CelestialBody {
     pub(crate) fn new(
         id: Id,
         owner: Id,
-        coords: Vector3,
-        local_direction: Vector3,
+        coords: Cartesian,
+        local_direction: Cartesian,
         local_speed: f64,
         angular_speed: f64,
         rotating_speed: f64,
@@ -81,17 +79,17 @@ impl CelestialBody {
         }
     }
 
-    pub(crate) fn dummy(id: Id) -> CelestialBody {
-        CelestialBody::new(
-            id,
-            Id::default(),
-            Vector3::default(),
-            Vector3::default(),
-            0f64,
-            0f64,
-            0f64,
-            Id::default(),
-            Entity::Asteroid(Asteroid { id: Id::default() }),
-        )
-    }
+    // pub(crate) fn dummy(id: Id) -> CelestialBody {
+    //     CelestialBody::new(
+    //         id,
+    //         Id::default(),
+    //         Cartesian::default(),
+    //         Cartesian::default(),
+    //         0f64,
+    //         0f64,
+    //         0f64,
+    //         Id::default(),
+    //         Entity::Asteroid(Asteroid { id: Id::default() }),
+    //     )
+    // }
 }

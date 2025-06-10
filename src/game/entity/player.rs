@@ -1,7 +1,10 @@
+use scilib::coordinate::cartesian::Cartesian;
+use tokio::sync::mpsc::Sender;
+
 use crate::{
-    game::{celestial_body::CelestialBody, repr::Vector3},
+    game::celestial_body::CelestialBody,
     protocol::{BodyInfo, GameInfo, PlayerAction, PlayerInfo},
-    Id,
+    spacebuild_log, Id,
 };
 
 #[derive(Clone, Debug)]
@@ -10,7 +13,8 @@ pub struct Player {
     pub(crate) nickname: String,
     pub(crate) _ownings: Vec<Id>,
     pub(crate) actions: Vec<PlayerAction>,
-    pub(crate) infos_sender: tokio::sync::mpsc::Sender<GameInfo>,
+    pub(crate) infos_sender: Sender<GameInfo>,
+    pub(crate) initialized: bool,
 }
 
 impl PartialEq for Player {
@@ -24,34 +28,31 @@ impl Player {
         &self.nickname
     }
 
-    pub fn new(
-        id: Id,
-        nickname: String,
-        infos_sender: tokio::sync::mpsc::Sender<GameInfo>,
-    ) -> Player {
+    pub fn new(id: Id, nickname: String, infos_sender: Sender<GameInfo>) -> Player {
         Player {
             id,
             actions: Vec::default(),
             infos_sender,
             nickname,
             _ownings: Vec::default(),
+            initialized: false,
         }
     }
 
     pub async fn update(
         &mut self,
-        coordinates: Vector3,
+        coordinates: Cartesian,
         speed: f64,
         delta: f64,
         env: Vec<&CelestialBody>,
-    ) -> (Vector3, Vector3, f64) {
-        let mut direction = Vector3::default();
+    ) -> (Cartesian, Cartesian, f64) {
+        let mut direction = Cartesian::default();
 
         for action in &self.actions {
             match action {
                 PlayerAction::ShipState(ship_state) => {
                     if ship_state.throttle_up {
-                        direction = Vector3::from(
+                        direction = Cartesian::from(
                             ship_state.direction[0],
                             ship_state.direction[1],
                             ship_state.direction[2],
@@ -63,20 +64,29 @@ impl Player {
             }
         }
 
-        self.actions.clear();
-
         let mut coords = coordinates.clone();
 
         if direction.norm() > 0f64 {
             coords += direction / direction.norm() * speed * delta;
         }
 
-        let _ = self
-            .infos_sender
-            .send(GameInfo::Player(PlayerInfo {
-                coords: [coords.x, coords.y, coords.z],
-            }))
-            .await;
+        if !self.actions.is_empty() || !self.initialized {
+            let result = self
+                .infos_sender
+                .send(GameInfo::Player(PlayerInfo {
+                    coords: [coords.x, coords.y, coords.z],
+                }))
+                .await;
+
+            if result.is_err() {
+                spacebuild_log!(warn, self.nickname, "Failed to send player info");
+            }
+        }
+
+        if !self.initialized {
+            self.initialized = true
+        }
+        self.actions.clear();
 
         let mut bodies = Vec::new();
 
@@ -97,19 +107,13 @@ impl Player {
             });
 
             if bodies.len() == 50 {
-                let _ = self
-                    .infos_sender
-                    .send(GameInfo::BodiesInSystem(bodies.clone()))
-                    .await;
+                let _ = self.infos_sender.send(GameInfo::BodiesInSystem(bodies.clone())).await;
                 bodies.clear();
             }
         }
 
         if !bodies.is_empty() {
-            let _ = self
-                .infos_sender
-                .send(GameInfo::BodiesInSystem(bodies.clone()))
-                .await;
+            let _ = self.infos_sender.send(GameInfo::BodiesInSystem(bodies.clone())).await;
         }
 
         (coords, direction, speed)

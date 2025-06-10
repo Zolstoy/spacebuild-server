@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-pub mod client;
+pub mod bot;
 pub mod error;
 pub mod game;
 pub mod instance;
@@ -11,9 +11,43 @@ pub mod service;
 pub mod sql_database;
 pub mod sync_pool;
 
+#[cfg(feature = "tracing")]
+pub mod tracing;
+
 pub type Result<T> = std::result::Result<T, crate::error::Error>;
 
 pub type Id = u32;
+
+#[macro_export]
+macro_rules! spacebuild_log {
+    ( $level:ident, $section:expr, $fmt:expr $(, $arg:expr)*) => {
+        {
+            use colored::Colorize;
+            use std::hash::{DefaultHasher, Hash, Hasher};
+            let level_str = stringify!($level);
+            let color_level = match level_str {
+                "trace" => (140, 140, 140),
+                "debug" => (181, 172, 7),
+                "info" => (240, 240, 240),
+                "warn" => (237, 99, 0),
+                "error" => (219, 9, 23),
+                _ => (20, 20, 20)
+            };
+            let mut s = DefaultHasher::new();
+            $section.to_string().hash(&mut s);
+            let hash = s.finish();
+            let r = (hash & 0xFF) as u8;
+            let g = ((hash & 0xFF00) >> 8) as u8;
+            let b = ((hash & 0xFF0000) >> 16) as u8;
+
+            log::$level!("{:>15}|{}", $section.to_string().truecolor(r, g, b),
+                format!($fmt, $(
+                    $arg,
+                )*).truecolor(color_level.0, color_level.1, color_level.2)
+            )
+        }
+    }
+}
 
 #[cfg(test)]
 use test_helpers_async::*;
@@ -24,14 +58,13 @@ mod tests_sync_pool {
     use std::{env, fs::File};
 
     use sqlx::SqlitePool;
+    use tokio::sync::mpsc::channel;
     use uuid::Uuid;
 
-    use crate::{
-        game::entity::Entity, instance::Instance, sql_database::SqlDatabase, sync_pool::SyncPool,
-    };
+    use crate::{game::entity::Entity, instance::Instance, sql_database::SqlDatabase, sync_pool::SyncPool};
 
     pub fn before_all() {
-        log::info!("Timeout is {}s", TIMEOUT_DURATION);
+        spacebuild_log!(info, "test", "Timeout is {}s", TIMEOUT_DURATION);
     }
 
     const TIMEOUT_DURATION: u64 = 10;
@@ -76,7 +109,7 @@ mod tests_sync_pool {
         assert_eq!(11, sync_pool.body_next_id);
         assert_eq!(1, sync_pool.player_next_id);
 
-        let (send, _recv) = tokio::sync::mpsc::channel(1000);
+        let (send, _recv) = channel(100);
         let player = sync_pool.new_player("test", send);
 
         assert_eq!(12, sync_pool.body_next_id);
@@ -113,7 +146,7 @@ mod tests_sync_pool {
         let mut sync_pool = bootstrap(db_path.clone(), true).await?;
 
         let _asteroids = sync_pool.new_asteroids(10);
-        let (send, _recv) = tokio::sync::mpsc::channel(1000);
+        let (send, _recv) = channel(100);
         let player = sync_pool.new_player("test", send);
         let _star = sync_pool.new_star();
 
@@ -121,11 +154,43 @@ mod tests_sync_pool {
 
         let mut sync_pool = bootstrap(db_path, false).await?;
 
-        let (send, _recv) = tokio::sync::mpsc::channel(1000);
+        let (send, _recv) = channel(100);
         let player2 = sync_pool.get_player("test", send).await?;
 
         assert_eq!(player.id, player2.id);
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests_galaxy {
+    use scilib::coordinate::cartesian::Cartesian;
+
+    use crate::game::{
+        celestial_body::CelestialBody,
+        entity::{star::Star, Entity},
+        galaxy::Galaxy,
+    };
+
+    #[test]
+    fn case_01() -> anyhow::Result<()> {
+        let mut galaxy = Galaxy::default();
+        galaxy.insert_celestial(CelestialBody::new(
+            42,
+            0,
+            Cartesian::origin(),
+            Cartesian::origin(),
+            0.,
+            0.,
+            0.,
+            0,
+            Entity::Star(Star::new(42)),
+        ));
+
+        let celestial_ref = galaxy.borrow_body(42);
+        assert!(celestial_ref.is_some());
+        assert_eq!(42, celestial_ref.unwrap().id);
         Ok(())
     }
 }

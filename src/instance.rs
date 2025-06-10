@@ -2,8 +2,8 @@ use crate::error::Error;
 use crate::game::celestial_body::CelestialBody;
 use crate::game::entity::Entity;
 use crate::game::galaxy::Galaxy;
-use crate::game::repr::Vector3;
 use crate::protocol::GameInfo;
+use crate::spacebuild_log;
 use crate::sql_database::SqlDatabase;
 use crate::sync_pool::SyncPool;
 use crate::{Id, Result};
@@ -17,6 +17,7 @@ use sqlx::SqlitePool;
 use std::f64::consts::{PI, TAU};
 use std::fs::File;
 use std::path::Path;
+use tokio::sync::mpsc::{self, Receiver};
 
 pub struct Instance {
     pub(crate) sync_pool: SyncPool,
@@ -148,10 +149,7 @@ impl Instance {
         &mut self.galaxy
     }
 
-    pub async fn load_player_by_nickname(
-        &mut self,
-        nickname: String,
-    ) -> Result<(Id, tokio::sync::mpsc::Receiver<GameInfo>)> {
+    pub async fn load_player_by_nickname(&mut self, nickname: String) -> Result<(Id, Receiver<GameInfo>)> {
         if nickname.is_empty() || !nickname.is_printable() {
             return Err(Error::InvalidNickname);
         }
@@ -164,7 +162,7 @@ impl Instance {
             }
         }
 
-        let (send, recv) = tokio::sync::mpsc::channel(1000);
+        let (send, recv) = mpsc::channel(10000);
         let player = self.sync_pool.get_player(&nickname, send).await?;
 
         let star = self.sync_pool.get_body(player.gravity_center).await?;
@@ -182,7 +180,7 @@ impl Instance {
     }
 
     pub async fn leave(&mut self, id: Id) -> Result<()> {
-        log::info!("Leave for {}", id);
+        spacebuild_log!(info, "instance", "Leave for {}", id);
         let maybe_player = self.galaxy.celestials.iter_mut().find(|c| c.id == id);
 
         if let Some(player) = maybe_player {
@@ -193,35 +191,27 @@ impl Instance {
                 if let Entity::Player(player) = &mut removed.entity {
                     player.actions.clear();
                     self.sync_pool.sync_body(&removed);
+                    self.sync_pool.save().await?;
                     // self.sync_pool.save_and_unload_player(removed.id).await?;
                 } else {
-                    unreachable!()
+                    panic!("ID NOT PLAYER");
                 }
             } else {
-                log::error!("COULD NOT REMOVE PLAYER FROM TREE");
-                return Err(Error::CriticalCouldNotRemovePlayerFromTree(id));
+                panic!("COULD NOT REMOVE PLAYER FROM TREE");
             }
         } else {
-            log::error!(
-                "Leave called but player {} not found. Container size is {}",
-                id,
-                self.galaxy.celestials.iter().count()
-            );
-            return Err(Error::LeavePlayerNotFound(id));
+            panic!("PLAYER NOT FOUND IN RTREE");
         }
 
         Ok(())
     }
 
-    pub async fn authenticate(
-        &mut self,
-        nickname: &String,
-    ) -> Result<(Id, tokio::sync::mpsc::Receiver<GameInfo>)> {
+    pub async fn authenticate(&mut self, nickname: &String) -> Result<(Id, Receiver<GameInfo>)> {
         let maybe_id = self.load_player_by_nickname(nickname.clone()).await;
 
         match maybe_id {
             Err(Error::DbLoadPlayerByNicknameNotFound) => {
-                log::info!("New player, generating spawning bodies...");
+                spacebuild_log!(info, "server", "New player, generating spawning bodies...");
                 let (star, asteroids) = self.gen_system().await?;
                 let player_coords = {
                     let mut rng = ChaCha8Rng::seed_from_u64(0);
@@ -238,7 +228,7 @@ impl Instance {
                     self.galaxy.celestials.insert(body);
                 }
 
-                let (send, recv) = tokio::sync::mpsc::channel::<GameInfo>(1000);
+                let (send, recv) = mpsc::channel(10000);
 
                 let mut player = self.sync_pool.new_player(&nickname, send);
                 player.coords = player_coords;
@@ -261,7 +251,7 @@ impl Instance {
         let phi = rng.random_range(-TAU..TAU);
         let theta = rng.random_range(PI - 0.1..PI + 0.1);
         let distance = rng.random_range(10000f64..100000f64);
-        let coords = Vector3::from_coord(Spherical::from(distance, theta, phi));
+        let coords = Cartesian::from_coord(Spherical::from(distance, theta, phi));
 
         let mut star = self.sync_pool.new_star();
 
@@ -278,7 +268,7 @@ impl Instance {
             let phi = rng.random_range(-TAU..TAU);
             let theta = rng.random_range(PI - 0.1..PI + 0.1);
             let distance = rng.random_range(500f64..4000f64);
-            let add_vec = Vector3::from_coord(Spherical::from(distance, theta, phi));
+            let add_vec = Cartesian::from_coord(Spherical::from(distance, theta, phi));
             let mut cln = coords.clone();
             cln = cln + add_vec;
             planet.coords = cln;
@@ -292,7 +282,7 @@ impl Instance {
                 let phi = rng.random_range(-TAU..TAU);
                 let theta = rng.random_range(PI - 0.1..PI + 0.1);
                 let distance = rng.random_range(100f64..500f64);
-                let add_vec = Vector3::from_coord(Spherical::from(distance, theta, phi));
+                let add_vec = Cartesian::from_coord(Spherical::from(distance, theta, phi));
                 let mut cln = planet.coords.clone();
                 cln = cln + add_vec;
                 moon.coords = cln;
@@ -312,7 +302,7 @@ impl Instance {
             let phi = rng.random_range(-TAU..TAU);
             let theta = rng.random_range(PI - 0.1..PI + 0.1);
             let distance = rng.random_range(1500f64..4000f64);
-            let add_vec = Vector3::from_coord(Spherical::from(distance, theta, phi));
+            let add_vec = Cartesian::from_coord(Spherical::from(distance, theta, phi));
 
             let mut cln = coords.clone();
 

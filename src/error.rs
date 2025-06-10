@@ -6,8 +6,14 @@ use crate::Id;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    // #[error("Error")]
-    // Error,
+    #[error("Not a text message")]
+    NotTextMessage,
+    #[error("Player not authenticated")]
+    PlayerNotAuthenticated,
+    #[error("URL parsed into request errror")]
+    UrlIntoRequest,
+    #[error("Authentication error: {0}")]
+    AuthenticationError(String),
     #[error("Join error: {0}")]
     JoinError(String),
     #[error("Service error: {0}")]
@@ -74,6 +80,8 @@ pub enum Error {
     WsCantSend(tungstenite::Error),
     #[error("Websocket read: {0}")]
     WsCantRead(tungstenite::Error),
+    #[error("Websocket: no next message")]
+    WsNoMessage(),
     #[error("Unexpected response from server: {0}")]
     UnexpectedResponse(String),
     #[error("Bad UUID in \"{0}\"")]
@@ -98,8 +106,10 @@ pub enum Error {
     NextTlsMessage,
     #[error("Next message on plain not found")]
     NextTcpMessage,
-    #[error("WebSocket upgrade on plain error: {0}")]
-    WebSocketUpgradeOnPlainError(tungstenite::Error),
-    #[error("WebSocket upgrade on TLS error: {0}")]
-    WebSocketUpgradeOnTlsError(tungstenite::Error),
+    #[error("WebSocket upgrade error: {0}")]
+    WebSocketUpgrade(tungstenite::Error),
+    #[error("Invalid JSON: {0}")]
+    InvalidJson(serde_json::Error),
+    #[error("Login error: {0}")]
+    Login(String),
 }

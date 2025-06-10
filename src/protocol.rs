@@ -1,6 +1,23 @@
 use serde::{Deserialize, Serialize};
+use tokio_tungstenite::tungstenite::Message;
 
+use crate::error::Error;
 use crate::Id;
+use crate::Result;
+
+pub trait IntoMessage {
+    fn to_message(&self) -> Result<Message>;
+}
+
+impl<T> IntoMessage for T
+where
+    T: Serialize,
+{
+    fn to_message(&self) -> Result<Message> {
+        let json = serde_json::to_string(self).map_err(|err| Error::FailedToSerializeLogin(err))?;
+        Ok(Message::text(json))
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Login {
@@ -43,5 +60,5 @@ pub struct AuthInfo {
 pub enum GameInfo {
     Player(PlayerInfo),
     BodiesInSystem(Vec<BodyInfo>),
-    PlayersInSystem(Vec<PlayerInfo>),
+    // PlayersInSystem(Vec<PlayerInfo>),
 }
