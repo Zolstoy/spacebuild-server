@@ -51,12 +51,12 @@ where
             Message::Text(msg) => {
                 let maybe_action: serde_json::Result<PlayerAction> = serde_json::from_str(msg.as_str());
 
-                let mut login_info = AuthInfo {
+                let mut auth_info = AuthInfo {
                     success: false,
                     message: "".to_string(),
                 };
                 if maybe_action.is_err() {
-                    login_info.message = "Invalid JSON".to_string();
+                    auth_info.message = "Invalid JSON".to_string();
                     Err(Error::InvalidJson(maybe_action.err().unwrap()))
                 } else {
                     let maybe_login = maybe_action.unwrap();
@@ -67,9 +67,9 @@ where
                         spacebuild_log!(info, self.address, "Login request for {}", login.nickname);
                         let maybe_id_recv = guard.authenticate(&login.nickname).await;
                         if maybe_id_recv.is_err() {
-                            login_info.message = format!("{}", maybe_id_recv.err().unwrap());
-                            spacebuild_log!(warn, self.address, "Login error: {}", login_info.message);
-                            return Err(Error::AuthenticationError(login_info.message));
+                            auth_info.message = format!("{}", maybe_id_recv.err().unwrap());
+                            spacebuild_log!(warn, self.address, "Login error: {}", auth_info.message);
+                            return Err(Error::AuthenticationError(auth_info.message));
                         }
 
                         let (player_id, body_id, infos_recv) = maybe_id_recv.unwrap();
@@ -80,10 +80,10 @@ where
 
                         spacebuild_log!(debug, self.address, "Login success for {}", self.id);
 
-                        login_info.success = true;
-                        login_info.message = self.id.to_string();
+                        auth_info.success = true;
+                        auth_info.message = self.id.to_string();
 
-                        let maybe_login_info_str = serde_json::to_string(&login_info);
+                        let maybe_login_info_str = serde_json::to_string(&auth_info);
                         assert!(maybe_login_info_str.is_ok());
                         let result = self.websocket.send(Message::text(maybe_login_info_str.unwrap())).await;
                         if result.is_err() {
@@ -157,6 +157,10 @@ where
                                 }
                             }
 
+                        }
+                        Message::Close(_) => {
+                            self.instance.lock().await.leave(self.id, self.body_id, &self.nickname).await?;
+                            return Ok(());
                         }
                         _ => {
                             spacebuild_log!(info, self.address, "Unexpected message type received: closing client");
