@@ -200,8 +200,7 @@ impl SyncPool {
         })
     }
 
-    fn body_from_row(row: &SqliteRow, entity: Entity, from_join: bool) -> Result<CelestialBody> {
-        // let id_column_name = if from_join { "body_id" } else { "id" };
+    fn body_from_row(row: &SqliteRow, entity: Entity) -> Result<CelestialBody> {
         let id_column_name = "id";
         Ok(CelestialBody {
             coords: Self::coordinates_from_row(row, "coordinate")?,
@@ -216,8 +215,7 @@ impl SyncPool {
         })
     }
 
-    fn player_from_row(row: &SqliteRow, from_join: bool, infos_sender: Sender<GameInfo>) -> Result<Entity> {
-        // let id_column_name = if from_join { "player_id" } else { "id" };
+    fn player_from_row(row: &SqliteRow, infos_sender: Sender<GameInfo>) -> Result<Entity> {
         let id_column_name = "id";
         Ok(Entity::Player(Player::new(
             Self::id_from_row(row, id_column_name)?,
@@ -371,7 +369,7 @@ impl SyncPool {
 
         let row = results.first().unwrap();
 
-        let synced_body = SyncedBody::new(Self::body_from_row(row, entity, false)?);
+        let synced_body = SyncedBody::new(Self::body_from_row(row, entity)?);
         let id = synced_body.body.id;
         self.synced_bodies.insert(id, synced_body);
         Ok(self.synced_bodies.get(&id).unwrap().body.clone())
@@ -452,7 +450,7 @@ impl SyncPool {
 
             let body_row = results.first().unwrap();
 
-            let player = Self::body_from_row(body_row, Self::player_from_row(player_row, false, infos_sender)?, false)?;
+            let player = Self::body_from_row(body_row, Self::player_from_row(player_row, infos_sender)?)?;
             let player_id = if let Entity::Player(player_entity) = &player.entity {
                 player_entity.id
             } else {
@@ -471,12 +469,12 @@ impl SyncPool {
                 angular_speed: synced_player.1.body.angular_speed,
                 coords: synced_player.1.body.coords.clone(),
                 gravity_center: synced_player.1.body.gravity_center,
-                id: player_id,
+                id: synced_player.1.body.id,
                 local_direction: synced_player.1.body.local_direction.clone(),
                 local_speed: synced_player.1.body.local_speed,
                 owner: synced_player.1.body.owner,
                 rotating_speed: synced_player.1.body.rotating_speed,
-                entity: Entity::Player(Player::new(synced_player.1.body.id, nickname.to_string(), infos_sender)),
+                entity: Entity::Player(Player::new(player_id, nickname.to_string(), infos_sender)),
             }
         };
 
@@ -493,15 +491,19 @@ impl SyncPool {
     }
 
     pub async fn save_and_unload_player(&mut self, id: u32, body_id: u32, nickname: &String) -> Result<()> {
+        let synced_player = self.synced_bodies.get_mut(&body_id).unwrap();
+
         self.database
-            .insert_row_into(
-                "Player",
-                vec![id.to_string(), format!("\"{}\"", nickname.clone()), body_id.to_string()],
-                vec![],
-            )
+            .insert_row_into("Body", Self::row_from_body(&synced_player.body), vec![])
             .await
             .unwrap();
-        self.synced_bodies.remove(&id);
+
+        self.database
+            .insert_row_into("Player", Self::row_from_player(&synced_player.body), vec![])
+            .await
+            .unwrap();
+
+        self.synced_bodies.remove(&body_id);
         Ok(())
     }
 
