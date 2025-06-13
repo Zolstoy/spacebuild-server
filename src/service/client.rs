@@ -4,7 +4,6 @@ use crate::instance::Instance;
 use crate::protocol::AuthInfo;
 use crate::protocol::GameInfo;
 use crate::protocol::PlayerAction;
-use crate::Id;
 use futures::SinkExt;
 use futures::StreamExt;
 use hyper_tungstenite::tungstenite::Message;
@@ -28,6 +27,8 @@ where
     instance: Arc<Mutex<Instance>>,
     id: u32,
     address: SocketAddr,
+    nickname: String,
+    body_id: u32,
 }
 
 impl<S> Client<S>
@@ -38,8 +39,10 @@ where
         Client::<S> {
             websocket,
             instance,
-            id: Id::MAX,
+            id: u32::MAX,
             address,
+            nickname: String::default(),
+            body_id: u32::MAX,
         }
     }
 
@@ -62,16 +65,18 @@ where
                         let mut guard = self.instance.lock().await;
 
                         spacebuild_log!(info, self.address, "Login request for {}", login.nickname);
-                        let maybe_uuid = guard.authenticate(&login.nickname).await;
-                        if maybe_uuid.is_err() {
-                            login_info.message = format!("{}", maybe_uuid.err().unwrap());
+                        let maybe_id_recv = guard.authenticate(&login.nickname).await;
+                        if maybe_id_recv.is_err() {
+                            login_info.message = format!("{}", maybe_id_recv.err().unwrap());
                             spacebuild_log!(warn, self.address, "Login error: {}", login_info.message);
                             return Err(Error::AuthenticationError(login_info.message));
                         }
 
-                        let (player_id, infos_recv) = maybe_uuid.unwrap();
+                        let (player_id, body_id, infos_recv) = maybe_id_recv.unwrap();
 
                         self.id = player_id;
+                        self.body_id = body_id;
+                        self.nickname = login.nickname.clone();
 
                         spacebuild_log!(debug, self.address, "Login success for {}", self.id);
 
@@ -107,7 +112,7 @@ where
                     let result = self.websocket.send(Message::text(str)).await;
                     if result.is_err() {
                         spacebuild_log!(warn, self.address, "Could not send data to client {}: {}", self.id, result.err().unwrap());
-                        self.instance.lock().await.leave(self.id).await?;
+                        self.instance.lock().await.leave(self.id, self.body_id, &self.nickname).await?;
                         let _ = self.websocket.close(None).await;
                         return Ok(());
                     }
@@ -116,7 +121,7 @@ where
                     spacebuild_log!(trace, self.address, "Message received");
                     if message.is_err() {
                         spacebuild_log!(info, self.address, "Websocket read error: {}", message.err().unwrap());
-                        self.instance.lock().await.leave(self.id).await?;
+                        self.instance.lock().await.leave(self.id, self.body_id, &self.nickname).await?;
                         return Ok(());
                     }
                     match message.unwrap() {
@@ -155,7 +160,7 @@ where
                         }
                         _ => {
                             spacebuild_log!(info, self.address, "Unexpected message type received: closing client");
-                            self.instance.lock().await.leave(self.id).await?;
+                            self.instance.lock().await.leave(self.id, self.body_id, &self.nickname).await?;
                             return Ok(());
                         }
                     }
@@ -171,13 +176,6 @@ where
             return Ok(());
         }
         let message = message.unwrap();
-        // if message.is_err() {
-        //     spacebuild_log!(info, self.address, "Websocket read error: {}", message.err().unwrap());
-        //     if self.id != u32::MAX {
-        //         self.instance.lock().await.leave(self.id).await?;
-        //     }
-        //     return Ok(());
-        // }
         let recv = self.handle_message_for_auth(message.unwrap()).await?;
         self.handle_message_for_gameplay(recv).await?;
         Ok(())

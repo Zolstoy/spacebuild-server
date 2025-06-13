@@ -1,5 +1,5 @@
 use super::{celestial_body::CelestialBody, entity::Entity};
-use crate::{spacebuild_log, Id};
+use crate::spacebuild_log;
 use core::f64;
 use rstar::{RTree, AABB};
 use scilib::coordinate::{cartesian::Cartesian, spherical::Spherical};
@@ -19,11 +19,11 @@ impl Galaxy {
         self.celestials.iter().collect()
     }
 
-    pub fn borrow_body(&self, id: Id) -> Option<&CelestialBody> {
+    pub fn borrow_body(&self, id: u32) -> Option<&CelestialBody> {
         self.celestials.iter().find(|g| g.id == id)
     }
 
-    pub fn borrow_body_mut(&mut self, id: Id) -> Option<&mut CelestialBody> {
+    pub fn borrow_body_mut(&mut self, id: u32) -> Option<&mut CelestialBody> {
         self.celestials.iter_mut().find(|g| g.id == id)
     }
 

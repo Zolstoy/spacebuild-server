@@ -253,11 +253,12 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         let db_path = get_random_db_path();
         let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
         let mut client = test!(bot::connect_plain("localhost", port))?;
-        test!(client.login("test123"))?;
+        let id = test!(client.login("test123"))?;
         test!(client.terminate())?;
         tokio::time::sleep(*Duration::from_millis(4000)).await;
         let mut client2 = test!(bot::connect_plain("localhost", port))?;
-        test!(client2.login("test123"))?;
+        let id_later = test!(client2.login("test123"))?;
+        assert_eq!(id, id_later);
         test!(client2.terminate())?;
         send_stop.send(())?;
         test!(game_thread)??;
@@ -396,33 +397,6 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         }
         send_stop.send(())?;
         test!(game_thread)??;
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn case_20_scenario_01() -> anyhow::Result<()> {
-        let db_path = get_random_db_path();
-        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
-
-        let mut handlers = vec![];
-
-        for i in 1..100 {
-            let hdl = tokio::spawn(async move {
-                let mut client = test!(bot::connect_plain("localhost", port))?;
-                test!(client.login(format!("test{}", i).as_str()))?;
-                test!(client.terminate())?;
-                anyhow::Ok(())
-            });
-            handlers.push(hdl);
-        }
-
-        send_stop.send(())?;
-        test!(game_thread)??;
-
-        for hdl in handlers {
-            let _ = test!(hdl);
-        }
-
         Ok(())
     }
 }

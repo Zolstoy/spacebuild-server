@@ -6,7 +6,7 @@ use crate::protocol::GameInfo;
 use crate::spacebuild_log;
 use crate::sql_database::SqlDatabase;
 use crate::sync_pool::SyncPool;
-use crate::{Id, Result};
+use crate::Result;
 use is_printable::IsPrintable;
 use rand::prelude::*;
 use rand::Rng;
@@ -149,7 +149,7 @@ impl Instance {
         &mut self.galaxy
     }
 
-    pub async fn load_player_by_nickname(&mut self, nickname: String) -> Result<(Id, Receiver<GameInfo>)> {
+    pub async fn load_player_by_nickname(&mut self, nickname: String) -> Result<(u32, u32, Receiver<GameInfo>)> {
         if nickname.is_empty() || !nickname.is_printable() {
             return Err(Error::InvalidNickname);
         }
@@ -168,7 +168,12 @@ impl Instance {
         let star = self.sync_pool.get_body(player.gravity_center).await?;
         let rotatings = self.sync_pool.get_rotatings(star.id).await?;
 
-        let id = player.id;
+        let body_id = player.id;
+        let player_id = if let Entity::Player(player_entity) = &player.entity {
+            player_entity.id
+        } else {
+            unreachable!();
+        };
 
         self.galaxy.celestials.insert(player);
 
@@ -176,12 +181,18 @@ impl Instance {
             self.galaxy.celestials.insert(rotating);
         }
 
-        Ok((id, recv))
+        Ok((player_id, body_id, recv))
     }
 
-    pub async fn leave(&mut self, id: Id) -> Result<()> {
+    pub async fn leave(&mut self, id: u32, body_id: u32, nickname: &String) -> Result<()> {
         spacebuild_log!(info, "instance", "Leave for {}", id);
-        let maybe_player = self.galaxy.celestials.iter_mut().find(|c| c.id == id);
+        let maybe_player = self.galaxy.celestials.iter_mut().find(|c| {
+            if let Entity::Player(player_entity) = &c.entity {
+                player_entity.id == id
+            } else {
+                false
+            }
+        });
 
         if let Some(player) = maybe_player {
             let player = player.clone();
@@ -190,9 +201,7 @@ impl Instance {
             if let Some(mut removed) = maybe_removed {
                 if let Entity::Player(player) = &mut removed.entity {
                     player.actions.clear();
-                    // self.sync_pool.sync_body(&removed);
-                    // self.sync_pool.save().await?;
-                    self.sync_pool.save_and_unload_player(removed.id).await?;
+                    self.sync_pool.save_and_unload_player(id, body_id, nickname).await?;
                 } else {
                     panic!("ID NOT PLAYER");
                 }
@@ -206,7 +215,7 @@ impl Instance {
         Ok(())
     }
 
-    pub async fn authenticate(&mut self, nickname: &String) -> Result<(Id, Receiver<GameInfo>)> {
+    pub async fn authenticate(&mut self, nickname: &String) -> Result<(u32, u32, Receiver<GameInfo>)> {
         let maybe_id = self.load_player_by_nickname(nickname.clone()).await;
 
         match maybe_id {
@@ -235,13 +244,18 @@ impl Instance {
                 player.local_speed = 100f64;
                 player.gravity_center = star_id;
 
-                let id = player.id;
+                let body_id = player.id;
+                let player_id = if let Entity::Player(player_entity) = &player.entity {
+                    player_entity.id
+                } else {
+                    unreachable!();
+                };
 
                 self.galaxy.celestials.insert(player);
 
-                Ok((id, recv))
+                Ok((player_id, body_id, recv))
             }
-            Ok(id) => Ok(id),
+            Ok(id_recv) => Ok(id_recv),
             Err(err) => Err(err),
         }
     }

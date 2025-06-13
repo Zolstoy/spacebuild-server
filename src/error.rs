@@ -2,8 +2,6 @@ use rustls_pki_types::InvalidDnsNameError;
 use tokio::io;
 use tokio_tungstenite::tungstenite;
 
-use crate::Id;
-
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Not a text message")]
@@ -31,7 +29,7 @@ pub enum Error {
     #[error("SqlDb: can't insert ({0}): {1}")]
     SqlDbInsertError(String, sqlx::Error),
     #[error("Uuid not found in db: {0}")]
-    DbUuidNotFound(Id),
+    DbUuidNotFound(u32),
     #[error("Gravity center not found")]
     GravityCenterNotFound,
     #[error("Invalid nickname")]
@@ -51,7 +49,7 @@ pub enum Error {
     #[error("DB file creation error {0}")]
     DbFileCreationError(std::io::Error),
     #[error("DB invalid ID: {0}")]
-    DbInvalidUuidError(Id),
+    DbInvalidUuidError(u32),
     #[error("CRITICAL: found several ({0}) players with same nickname")]
     DbLoadPlayerByNicknameFoundTooMany(usize),
     #[error("Can't load player: nickname not found")]
@@ -99,9 +97,9 @@ pub enum Error {
     #[error("Unexpected table")]
     UnexpectedTable,
     #[error("Could not remove player from tree, id: {0}")]
-    CriticalCouldNotRemovePlayerFromTree(Id),
+    CriticalCouldNotRemovePlayerFromTree(u32),
     #[error("Leaving player not found")]
-    LeavePlayerNotFound(Id),
+    LeavePlayerNotFound(u32),
     #[error("Next message on TLS not found")]
     NextTlsMessage,
     #[error("Next message on plain not found")]

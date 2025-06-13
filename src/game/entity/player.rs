@@ -4,14 +4,14 @@ use tokio::sync::mpsc::Sender;
 use crate::{
     game::celestial_body::CelestialBody,
     protocol::{BodyInfo, GameInfo, PlayerAction, PlayerInfo},
-    spacebuild_log, Id,
+    spacebuild_log,
 };
 
 #[derive(Clone, Debug)]
 pub struct Player {
-    pub(crate) id: Id,
+    pub(crate) id: u32,
     pub(crate) nickname: String,
-    pub(crate) _ownings: Vec<Id>,
+    pub(crate) _ownings: Vec<u32>,
     pub(crate) actions: Vec<PlayerAction>,
     pub(crate) infos_sender: Sender<GameInfo>,
     pub(crate) initialized: bool,
@@ -28,7 +28,7 @@ impl Player {
         &self.nickname
     }
 
-    pub fn new(id: Id, nickname: String, infos_sender: Sender<GameInfo>) -> Player {
+    pub fn new(id: u32, nickname: String, infos_sender: Sender<GameInfo>) -> Player {
         Player {
             id,
             actions: Vec::default(),

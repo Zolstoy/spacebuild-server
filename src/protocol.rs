@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::error::Error;
-use crate::Id;
 use crate::Result;
 
 pub trait IntoMessage {
@@ -45,8 +44,8 @@ pub struct PlayerInfo {
 pub struct BodyInfo {
     pub coords: [f64; 3],
     pub rotating_speed: f64,
-    pub gravity_center: Id,
-    pub id: Id,
+    pub gravity_center: u32,
+    pub id: u32,
     pub element_type: String,
 }
 

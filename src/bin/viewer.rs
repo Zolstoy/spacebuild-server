@@ -21,7 +21,6 @@ use spacebuild::{
     bot::{self, Bot},
     network::tls::ClientPki,
     protocol::{BodyInfo, GameInfo},
-    Id,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -81,7 +80,7 @@ async fn run<S: AsyncRead + AsyncWrite + Unpin>(mut client: Bot<S>) -> Result<()
 struct App {
     should_quit: bool,
     cursor: (u16, u16),
-    celestials: HashMap<spacebuild::Id, spacebuild::protocol::BodyInfo>,
+    celestials: HashMap<u32, spacebuild::protocol::BodyInfo>,
     star: BodyInfo,
     list_scroll: usize,
     list_area: Rect,
@@ -231,7 +230,7 @@ impl App {
             &mut scrollbar_state,
         );
 
-        if self.star.id != Id::default() {
+        if self.star.id != u32::default() {
             let cln = self.celestials.clone();
             let mut x_bounds = [-(self.draw_area.width as f64) / 2., self.draw_area.width as f64 / 2.];
             let mut y_bounds = [-(self.draw_area.height as f64), self.draw_area.height as f64];

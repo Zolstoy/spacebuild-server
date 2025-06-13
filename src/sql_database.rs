@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::{Id, Result};
+use crate::Result;
 use sqlx::sqlite::SqliteRow;
 use sqlx::{Pool, Sqlite};
 
@@ -115,20 +115,24 @@ impl SqlDatabase {
 
         insert_sql_str = insert_sql_str.strip_suffix(",").unwrap().to_string();
 
-        insert_sql_str += "ON CONFLICT(id) DO UPDATE SET ";
+        if !upserts.is_empty() {
+            insert_sql_str += "ON CONFLICT(id) DO UPDATE SET ";
 
-        for upsert in upserts {
-            insert_sql_str += upsert.0;
-            insert_sql_str += "=";
-            insert_sql_str += "excluded.";
-            insert_sql_str += upsert.1;
-            insert_sql_str += ",";
+            for upsert in upserts {
+                insert_sql_str += upsert.0;
+                insert_sql_str += "=";
+                insert_sql_str += "excluded.";
+                insert_sql_str += upsert.1;
+                insert_sql_str += ",";
+            }
+
+            insert_sql_str.strip_suffix(",").unwrap().to_string()
+        } else {
+            insert_sql_str
         }
-
-        insert_sql_str.strip_suffix(",").unwrap().to_string()
     }
 
-    pub async fn max_in(&mut self, table_name: &str, column_name: &str) -> Result<Option<Id>> {
+    pub async fn max_in(&mut self, table_name: &str, column_name: &str) -> Result<Option<u32>> {
         let result: sqlx::Result<i64> =
             sqlx::query_scalar(format!("SELECT MAX({}) FROM {}", column_name, table_name).as_str())
                 .fetch_one(&self.pool)

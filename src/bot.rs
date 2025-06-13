@@ -1,7 +1,6 @@
 use crate::error::Error;
 use crate::network::tls::{get_connector, ClientPki};
 use crate::protocol::{GameInfo, IntoMessage, PlayerInfo, ShipState};
-use crate::Id;
 use crate::{
     protocol::{AuthInfo, Login, PlayerAction},
     Result,
@@ -43,7 +42,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         Ok(())
     }
 
-    pub async fn login(&mut self, nickname: &str) -> Result<Id> {
+    pub async fn login(&mut self, nickname: &str) -> Result<u32> {
         self.send_action(PlayerAction::Login(Login {
             nickname: nickname.to_string(),
         }))
@@ -55,7 +54,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
                 let login_info: AuthInfo = serde_json::from_str(&response_str)
                     .map_err(|err| Error::DeserializeAuthenticationResponseError(err, response_str.to_string()))?;
 
-                let uuid = Id::from_str(login_info.message.as_str())
+                let uuid = u32::from_str(login_info.message.as_str())
                     .map_err(|_err| Error::BadUuidError(login_info.message))?;
 
                 return Ok(uuid);

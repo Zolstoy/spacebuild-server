@@ -16,8 +16,6 @@ pub mod tracing;
 
 pub type Result<T> = std::result::Result<T, crate::error::Error>;
 
-pub type Id = u32;
-
 #[macro_export]
 macro_rules! spacebuild_log {
     ( $level:ident, $section:expr, $fmt:expr $(, $arg:expr)*) => {

@@ -1,28 +1,34 @@
-use crate::Id;
-
 use super::entity::Entity;
 use rstar::{RTreeObject, AABB};
 use scilib::coordinate::cartesian::Cartesian;
 
 #[derive(Clone, Debug)]
 pub struct CelestialBody {
-    pub(crate) id: Id,
-    pub(crate) owner: Id,
+    pub(crate) id: u32,
+    pub(crate) owner: u32,
     pub(crate) coords: Cartesian,
     pub(crate) local_direction: Cartesian,
     pub(crate) local_speed: f64,
     pub(crate) angular_speed: f64,
     pub(crate) rotating_speed: f64,
-    pub(crate) gravity_center: Id,
+    pub(crate) gravity_center: u32,
     pub(crate) entity: Entity,
 }
 
 impl PartialEq for CelestialBody {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        if let Entity::Player(self_player_entity) = &self.entity {
+            if let Entity::Player(other_player_entity) = &other.entity {
+                self_player_entity.id == other_player_entity.id
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
     fn ne(&self, other: &Self) -> bool {
-        self.id != other.id
+        !(self == other)
     }
 }
 
@@ -35,7 +41,7 @@ impl RTreeObject for CelestialBody {
 }
 
 impl CelestialBody {
-    pub fn get_uuid(&self) -> Id {
+    pub fn get_uuid(&self) -> u32 {
         self.id
     }
 
@@ -56,14 +62,14 @@ impl CelestialBody {
     }
 
     pub(crate) fn new(
-        id: Id,
-        owner: Id,
+        id: u32,
+        owner: u32,
         coords: Cartesian,
         local_direction: Cartesian,
         local_speed: f64,
         angular_speed: f64,
         rotating_speed: f64,
-        gravity_center: Id,
+        gravity_center: u32,
         entity: Entity,
     ) -> CelestialBody {
         CelestialBody {

@@ -7,7 +7,7 @@ use crate::game::entity::star::Star;
 use crate::game::entity::Entity;
 use crate::protocol::GameInfo;
 use crate::{game::celestial_body::CelestialBody, sql_database::SqlDatabase};
-use crate::{spacebuild_log, Id, Result};
+use crate::{spacebuild_log, Result};
 use itertools::Itertools;
 use scilib::coordinate::cartesian::Cartesian;
 use sqlx::sqlite::SqliteRow;
@@ -27,10 +27,10 @@ impl SyncedBody {
 }
 
 pub struct SyncPool {
-    pub(crate) synced_bodies: HashMap<Id, SyncedBody>,
+    pub(crate) synced_bodies: HashMap<u32, SyncedBody>,
     pub(crate) database: SqlDatabase,
-    pub(crate) body_next_id: Id,
-    pub(crate) player_next_id: Id,
+    pub(crate) body_next_id: u32,
+    pub(crate) player_next_id: u32,
 }
 
 impl SyncPool {
@@ -55,13 +55,13 @@ impl SyncPool {
         })
     }
 
-    pub(crate) fn next_id_in_body(&mut self) -> Id {
+    pub(crate) fn next_id_in_body(&mut self) -> u32 {
         let ret = self.body_next_id;
         self.body_next_id += 1;
         ret
     }
 
-    pub(crate) fn next_id_in_player(&mut self) -> Id {
+    pub(crate) fn next_id_in_player(&mut self) -> u32 {
         let ret = self.player_next_id;
         self.player_next_id += 1;
         ret
@@ -75,14 +75,14 @@ impl SyncPool {
             let id = self.next_id_in_body();
             let body = CelestialBody::new(
                 id,
-                Id::MAX,
+                u32::MAX,
                 Cartesian::default(),
                 Cartesian::default(),
                 0f64,
                 0f64,
                 0f64,
-                Id::MAX,
-                Entity::Asteroid(Asteroid { id: Id::MAX }),
+                u32::MAX,
+                Entity::Asteroid(Asteroid { id: u32::MAX }),
             );
             self.synced_bodies.insert(id, SyncedBody::new(body.clone()));
 
@@ -96,14 +96,14 @@ impl SyncPool {
         spacebuild_log!(trace, "sync_pool", "new star");
         let celestial = CelestialBody::new(
             self.next_id_in_body(),
-            Id::MAX,
+            u32::MAX,
             Cartesian::default(),
             Cartesian::default(),
             0f64,
             0f64,
             0f64,
-            Id::MAX,
-            Entity::Star(Star { id: Id::MAX }),
+            u32::MAX,
+            Entity::Star(Star { id: u32::MAX }),
         );
 
         self.synced_bodies
@@ -116,14 +116,14 @@ impl SyncPool {
         spacebuild_log!(trace, "sync_pool", "new planet");
         let celestial = CelestialBody::new(
             self.next_id_in_body(),
-            Id::MAX,
+            u32::MAX,
             Cartesian::default(),
             Cartesian::default(),
             0f64,
             0f64,
             0f64,
-            Id::MAX,
-            Entity::Planet(Planet { id: Id::MAX }),
+            u32::MAX,
+            Entity::Planet(Planet { id: u32::MAX }),
         );
 
         self.synced_bodies
@@ -136,14 +136,14 @@ impl SyncPool {
         spacebuild_log!(trace, "sync_pool", "new moon");
         let celestial = CelestialBody::new(
             self.next_id_in_body(),
-            Id::MAX,
+            u32::MAX,
             Cartesian::default(),
             Cartesian::default(),
             0f64,
             0f64,
             0f64,
-            Id::MAX,
-            Entity::Moon(Moon { id: Id::MAX }),
+            u32::MAX,
+            Entity::Moon(Moon { id: u32::MAX }),
         );
 
         self.synced_bodies
@@ -156,13 +156,13 @@ impl SyncPool {
         spacebuild_log!(trace, "sync_pool", "new player");
         let celestial = CelestialBody::new(
             self.next_id_in_body(),
-            Id::MAX,
+            u32::MAX,
             Cartesian::default(),
             Cartesian::default(),
             0f64,
             0f64,
             0f64,
-            Id::MAX,
+            u32::MAX,
             Entity::Player(Player::new(
                 self.next_id_in_player(),
                 nickname.to_string(),
@@ -188,7 +188,7 @@ impl SyncPool {
         Ok(row.try_get(column_name).map_err(|err| Error::DbLoadError(err))?)
     }
 
-    fn id_from_row(row: &SqliteRow, column_name: &str) -> Result<Id> {
+    fn id_from_row(row: &SqliteRow, column_name: &str) -> Result<u32> {
         Ok(Self::int_from_row(row, column_name)?)
     }
 
@@ -248,8 +248,8 @@ impl SyncPool {
         }))
     }
 
-    fn value_from_id(id: Id) -> String {
-        if id == Id::MAX {
+    fn value_from_id(id: u32) -> String {
+        if id == u32::MAX {
             "NULL".to_string()
         } else {
             format!("{}", id.to_string())
@@ -317,7 +317,7 @@ impl SyncPool {
         }
     }
 
-    pub async fn get_body(&mut self, id: Id) -> Result<CelestialBody> {
+    pub async fn get_body(&mut self, id: u32) -> Result<CelestialBody> {
         let maybe_player_body = self.synced_bodies.get(&id);
         if maybe_player_body.is_some() {
             let player_body = maybe_player_body.unwrap();
@@ -375,7 +375,7 @@ impl SyncPool {
         Ok(self.synced_bodies.get(&id).unwrap().body.clone())
     }
 
-    pub async fn get_rotatings(&mut self, id: Id) -> Result<Vec<CelestialBody>> {
+    pub async fn get_rotatings(&mut self, id: u32) -> Result<Vec<CelestialBody>> {
         let mut ids = vec![id];
         let mut rotatings = Vec::new();
 
@@ -451,16 +451,25 @@ impl SyncPool {
             let body_row = results.first().unwrap();
 
             let player = Self::body_from_row(body_row, Self::player_from_row(player_row, false, infos_sender)?, false)?;
-
-            self.synced_bodies.insert(player.id, SyncedBody::new(player.clone()));
+            let player_id = if let Entity::Player(player_entity) = &player.entity {
+                player_entity.id
+            } else {
+                unreachable!();
+            };
+            self.synced_bodies.insert(player_id, SyncedBody::new(player.clone()));
             player
         } else {
             let synced_player = maybe_player.unwrap();
+            let player_id = if let Entity::Player(player_entity) = &synced_player.1.body.entity {
+                player_entity.id
+            } else {
+                unreachable!();
+            };
             CelestialBody {
                 angular_speed: synced_player.1.body.angular_speed,
                 coords: synced_player.1.body.coords.clone(),
                 gravity_center: synced_player.1.body.gravity_center,
-                id: synced_player.1.body.id,
+                id: player_id,
                 local_direction: synced_player.1.body.local_direction.clone(),
                 local_speed: synced_player.1.body.local_speed,
                 owner: synced_player.1.body.owner,
@@ -481,8 +490,15 @@ impl SyncPool {
         }
     }
 
-    pub async fn save_and_unload_player(&mut self, id: Id) -> Result<()> {
-        self.database.insert_row_into("Player", vec![], vec![]).await.unwrap();
+    pub async fn save_and_unload_player(&mut self, id: u32, body_id: u32, nickname: &String) -> Result<()> {
+        self.database
+            .insert_row_into(
+                "Player",
+                vec![id.to_string(), format!("\"{}\"", nickname.clone()), body_id.to_string()],
+                vec![],
+            )
+            .await
+            .unwrap();
         self.synced_bodies.remove(&id);
         Ok(())
     }
@@ -493,7 +509,7 @@ impl SyncPool {
         }
     }
 
-    pub async fn get_gravity_centers(&mut self, id: Id) -> Result<Vec<Id>> {
+    pub async fn get_gravity_centers(&mut self, id: u32) -> Result<Vec<u32>> {
         let results = self
             .database
             .select_from_where_equals("Body", "gravity_center", id.to_string().as_str())
