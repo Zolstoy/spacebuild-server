@@ -190,9 +190,9 @@ impl Instance {
             if let Some(mut removed) = maybe_removed {
                 if let Entity::Player(player) = &mut removed.entity {
                     player.actions.clear();
-                    self.sync_pool.sync_body(&removed);
-                    self.sync_pool.save().await?;
-                    // self.sync_pool.save_and_unload_player(removed.id).await?;
+                    // self.sync_pool.sync_body(&removed);
+                    // self.sync_pool.save().await?;
+                    self.sync_pool.save_and_unload_player(removed.id).await?;
                 } else {
                     panic!("ID NOT PLAYER");
                 }

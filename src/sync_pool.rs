@@ -481,6 +481,12 @@ impl SyncPool {
         }
     }
 
+    pub async fn save_and_unload_player(&mut self, id: Id) -> Result<()> {
+        self.database.insert_row_into("Player", vec![], vec![]).await.unwrap();
+        self.synced_bodies.remove(&id);
+        Ok(())
+    }
+
     pub fn sync(&mut self, bodies: Vec<&CelestialBody>) {
         for body in bodies {
             self.sync_body(body);
