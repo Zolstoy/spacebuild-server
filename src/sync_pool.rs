@@ -201,7 +201,8 @@ impl SyncPool {
     }
 
     fn body_from_row(row: &SqliteRow, entity: Entity, from_join: bool) -> Result<CelestialBody> {
-        let id_column_name = if from_join { "body_id" } else { "id" };
+        // let id_column_name = if from_join { "body_id" } else { "id" };
+        let id_column_name = "id";
         Ok(CelestialBody {
             coords: Self::coordinates_from_row(row, "coordinate")?,
             id: Self::id_from_row(row, id_column_name)?,
@@ -216,7 +217,8 @@ impl SyncPool {
     }
 
     fn player_from_row(row: &SqliteRow, from_join: bool, infos_sender: Sender<GameInfo>) -> Result<Entity> {
-        let id_column_name = if from_join { "player_id" } else { "id" };
+        // let id_column_name = if from_join { "player_id" } else { "id" };
+        let id_column_name = "id";
         Ok(Entity::Player(Player::new(
             Self::id_from_row(row, id_column_name)?,
             Self::string_from_row(row, "nickname")?,
