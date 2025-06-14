@@ -494,12 +494,20 @@ impl SyncPool {
         let synced_player = self.synced_bodies.get_mut(&body_id).unwrap();
 
         self.database
-            .insert_row_into("Body", Self::row_from_body(&synced_player.body), vec![("id", "id")])
+            .insert_row_into(
+                "Body",
+                Self::row_from_body(&synced_player.body),
+                vec![("id", "id"), ("gravity_center", "gravity_center")],
+            )
             .await
             .unwrap();
 
         self.database
-            .insert_row_into("Player", Self::row_from_player(&synced_player.body), vec![("id", "id")])
+            .insert_row_into(
+                "Player",
+                Self::row_from_player(&synced_player.body),
+                vec![("id", "id"), ("body_id", "body_id")],
+            )
             .await
             .unwrap();
 

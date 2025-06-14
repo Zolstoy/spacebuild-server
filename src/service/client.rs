@@ -108,6 +108,7 @@ where
         loop {
             tokio::select! {
                 Some(game_info) = stream.next() => {
+                    // let _ = self.mutex.lock().await;
                     let str = serde_json::to_string(&game_info).unwrap();
                     let result = self.websocket.send(Message::text(str)).await;
                     if result.is_err() {
@@ -118,6 +119,7 @@ where
                     }
                 },
                 Some(message) = self.websocket.next() => {
+                    // let _ = self.mutex.lock().await;
                     spacebuild_log!(trace, self.address, "Message received");
                     if message.is_err() {
                         spacebuild_log!(info, self.address, "Websocket read error: {}", message.err().unwrap());

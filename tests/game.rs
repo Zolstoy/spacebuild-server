@@ -255,9 +255,11 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         let mut client = test!(bot::connect_plain("localhost", port))?;
         let id = test!(client.login("test123"))?;
         test!(client.terminate())?;
-        tokio::time::sleep(*Duration::from_millis(4000)).await;
+        tokio::time::sleep(*Duration::from_millis(2000)).await;
         let mut client2 = test!(bot::connect_plain("localhost", port))?;
+        // tokio::time::sleep(*Duration::from_millis(2000)).await;
         let id_later = test!(client2.login("test123"))?;
+        // tokio::time::sleep(*Duration::from_millis(2000)).await;
         assert_eq!(id, id_later);
         test!(client2.terminate())?;
         send_stop.send(())?;
