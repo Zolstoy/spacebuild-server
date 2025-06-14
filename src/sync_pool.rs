@@ -506,7 +506,7 @@ impl SyncPool {
             .insert_row_into(
                 "Player",
                 Self::row_from_player(&synced_player.body),
-                vec![("id", "id"), ("body_id", "body_id")],
+                vec![("id", "id"), ("nickname", "nickname"), ("body_id", "body_id")],
             )
             .await
             .unwrap();

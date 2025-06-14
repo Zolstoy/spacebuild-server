@@ -55,51 +55,6 @@ impl SqlDatabase {
         Ok(rows)
     }
 
-    pub async fn select_from_joined_where_equals(
-        &mut self,
-        select: Vec<&str>,
-        first_table_name: &str,
-        second_table_name: &str,
-        join_left: &str,
-        join_right: &str,
-        where_column_name: &str,
-        where_value_name: &str,
-    ) -> Result<Vec<SqliteRow>> {
-        let mut select_part = "".to_string();
-
-        for select_item in select {
-            select_part += select_item;
-            select_part += ",";
-        }
-
-        if select_part.is_empty() {
-            select_part = '*'.to_string();
-        } else {
-            select_part = select_part.strip_suffix(",").unwrap().to_string();
-        }
-
-        let rows = sqlx::query(
-            format!(
-                "SELECT {} FROM {} INNER JOIN {} ON {} = {} WHERE {}=?",
-                select_part, first_table_name, second_table_name, join_left, join_right, where_column_name
-            )
-            .as_str(),
-        )
-        .bind(where_value_name)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|err| {
-            Error::DbSelectFromJoinedIdsError(
-                first_table_name.to_string(),
-                second_table_name.to_string(),
-                format!("{}={}", where_column_name, where_value_name),
-                err,
-            )
-        })?;
-
-        Ok(rows)
-    }
-
     fn vec_to_insert_str(table_name: &str, values: Vec<Vec<String>>, upserts: Vec<(&str, &str)>) -> String {
         let mut insert_sql_str = format!("INSERT INTO {} VALUES ", table_name);
 

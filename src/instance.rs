@@ -57,84 +57,34 @@ impl Instance {
         db.create_table(
             "Body",
             vec![
-                // "id INTEGER PRIMARY KEY AUTOINCREMENT",
-                "id INTEGER PRIMARY KEY",
-                "owner INTEGER",
-                "coordinate_x REAL NOT NULL",
-                "coordinate_y REAL NOT NULL",
-                "coordinate_z REAL NOT NULL",
-                "local_direction_x REAL NOT NULL",
-                "local_direction_y REAL NOT NULL",
-                "local_direction_z REAL NOT NULL",
-                "local_speed REAL",
-                "angular_speed REAL",
+                "id INTEGER PRIMARY KEY AUTOINCREMENT",
+                "type INTEGER NOT NULL",
+                "coord_x REAL NOT NULL",
+                "coord_y REAL NOT NULL",
+                "coord_z REAL NOT NULL",
                 "rotating_speed REAL",
                 "gravity_center INTEGER",
-                // "FOREIGN KEY (owner) REFERENCES Player (id) ON DELETE SET NULL",
-                // "FOREIGN KEY (gravity_center) REFERENCES Body (id) ON DELETE SET NULL",
+                "FOREIGN KEY (gravity_center) REFERENCES Body (id)",
             ],
-            vec!["id", "owner", "gravity_center"],
+            vec!["id", "gravity_center"],
         )
         .await?;
 
         db.create_table(
             "Player",
             vec![
-                // "id INTEGER PRIMARY KEY AUTOINCREMENT",
-                "id INTEGER PRIMARY KEY",
+                "id INTEGER PRIMARY KEY AUTOINCREMENT",
                 "nickname TEXT",
+                "coord_x REAL NOT NULL",
+                "coord_y REAL NOT NULL",
+                "coord_z REAL NOT NULL",
+                "direction_x REAL",
+                "direction_y REAL",
+                "direction_z REAL",
                 "body_id INTEGER",
-                // "FOREIGN KEY (body_id) REFERENCES Body (id)",
+                "FOREIGN KEY (body_id) REFERENCES Body (id)",
             ],
             vec!["id", "body_id", "nickname"],
-        )
-        .await?;
-
-        db.create_table(
-            "Star",
-            vec![
-                // "id INTEGER PRIMARY KEY AUTOINCREMENT",
-                "id INTEGER PRIMARY KEY",
-                "body_id INTEGER",
-                // "FOREIGN KEY (body_id) REFERENCES Body (id)",
-            ],
-            vec!["id", "body_id"],
-        )
-        .await?;
-
-        db.create_table(
-            "Planet",
-            vec![
-                // "id INTEGER PRIMARY KEY AUTOINCREMENT",
-                "id INTEGER PRIMARY KEY",
-                "body_id INTEGER",
-                // "FOREIGN KEY (body_id) REFERENCES Body (id)",
-            ],
-            vec!["id", "body_id"],
-        )
-        .await?;
-
-        db.create_table(
-            "Moon",
-            vec![
-                // "id INTEGER PRIMARY KEY AUTOINCREMENT",
-                "id INTEGER PRIMARY KEY",
-                "body_id INTEGER",
-                // "FOREIGN KEY (body_id) REFERENCES Body (id)",
-            ],
-            vec!["id", "body_id"],
-        )
-        .await?;
-
-        db.create_table(
-            "Asteroid",
-            vec![
-                // "id INTEGER PRIMARY KEY AUTOINCREMENT",
-                "id INTEGER PRIMARY KEY",
-                "body_id INTEGER",
-                // "FOREIGN KEY (body_id) REFERENCES Body (id)",
-            ],
-            vec!["id", "body_id"],
         )
         .await?;
 
