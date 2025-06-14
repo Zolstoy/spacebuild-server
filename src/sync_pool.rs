@@ -490,16 +490,16 @@ impl SyncPool {
         }
     }
 
-    pub async fn save_and_unload_player(&mut self, id: u32, body_id: u32, nickname: &String) -> Result<()> {
+    pub async fn save_and_unload_player(&mut self, body_id: u32) -> Result<()> {
         let synced_player = self.synced_bodies.get_mut(&body_id).unwrap();
 
         self.database
-            .insert_row_into("Body", Self::row_from_body(&synced_player.body), vec![])
+            .insert_row_into("Body", Self::row_from_body(&synced_player.body), vec![("id", "id")])
             .await
             .unwrap();
 
         self.database
-            .insert_row_into("Player", Self::row_from_player(&synced_player.body), vec![])
+            .insert_row_into("Player", Self::row_from_player(&synced_player.body), vec![("id", "id")])
             .await
             .unwrap();
 

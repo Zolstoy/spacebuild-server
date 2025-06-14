@@ -184,7 +184,7 @@ impl Instance {
         Ok((player_id, body_id, recv))
     }
 
-    pub async fn leave(&mut self, id: u32, body_id: u32, nickname: &String) -> Result<()> {
+    pub async fn leave(&mut self, id: u32, body_id: u32) -> Result<()> {
         spacebuild_log!(info, "instance", "Leave for {}", id);
         let maybe_player = self.galaxy.celestials.iter_mut().find(|c| {
             if let Entity::Player(player_entity) = &c.entity {
@@ -201,7 +201,7 @@ impl Instance {
             if let Some(mut removed) = maybe_removed {
                 if let Entity::Player(player) = &mut removed.entity {
                     player.actions.clear();
-                    self.sync_pool.save_and_unload_player(id, body_id, nickname).await?;
+                    self.sync_pool.save_and_unload_player(body_id).await?;
                 } else {
                     panic!("ID NOT PLAYER");
                 }

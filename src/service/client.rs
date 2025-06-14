@@ -112,7 +112,7 @@ where
                     let result = self.websocket.send(Message::text(str)).await;
                     if result.is_err() {
                         spacebuild_log!(warn, self.address, "Could not send data to client {}: {}", self.id, result.err().unwrap());
-                        self.instance.lock().await.leave(self.id, self.body_id, &self.nickname).await?;
+                        self.instance.lock().await.leave(self.id, self.body_id).await?;
                         let _ = self.websocket.close(None).await;
                         return Ok(());
                     }
@@ -121,7 +121,7 @@ where
                     spacebuild_log!(trace, self.address, "Message received");
                     if message.is_err() {
                         spacebuild_log!(info, self.address, "Websocket read error: {}", message.err().unwrap());
-                        self.instance.lock().await.leave(self.id, self.body_id, &self.nickname).await?;
+                        self.instance.lock().await.leave(self.id, self.body_id).await?;
                         return Ok(());
                     }
                     match message.unwrap() {
@@ -129,42 +129,36 @@ where
                             let maybe_action: serde_json::Result<PlayerAction> =
                                 serde_json::from_str(msg.as_str());
 
-                            let mut login_info = AuthInfo {
-                                success: false,
-                                message: "".to_string(),
-                            };
                             if maybe_action.is_err() {
-                                login_info.message = "Invalid JSON".to_string();
-                            } else {
-                                let maybe_login = maybe_action.unwrap();
+                                spacebuild_log!(warn, self.address, "bad JSON received");
+                                return Ok(());
+                            }
+                            let action = maybe_action.unwrap();
 
-                                if let PlayerAction::Login(_login) = maybe_login {
-                                        spacebuild_log!(info, self.address, "{} already authenticated, closing him.", self.id);
-                                        let _ = self.websocket.close(None).await;
-                                        return Ok(());
-                                } else {
-                                    let mut instance = self.instance.lock().await;
-                                    let maybe_element = instance.borrow_galaxy_mut().borrow_body_mut(self.id);
-                                    if let Some(maybe_player) = maybe_element {
-                                        if let Entity::Player(player) =
-                                            &mut maybe_player.entity
-                                        {
-                                            player.actions.push(maybe_login);
-                                        }
-                                    } else {
-                                        spacebuild_log!(error, self.address, "Can't find player {}", self.id);
+                            if let PlayerAction::ShipState(_state) = &action {
+                                let mut instance = self.instance.lock().await;
+                                let maybe_element = instance.borrow_galaxy_mut().borrow_body_mut(self.body_id);
+                                if let Some(maybe_player) = maybe_element {
+                                    if let Entity::Player(player) =
+                                        &mut maybe_player.entity
+                                    {
+                                        player.actions.push(action);
                                     }
+                                } else {
+                                    panic!("Can't find player {}", self.id);
                                 }
+                            } else {
+                                return Ok(())
                             }
 
                         }
                         Message::Close(_) => {
-                            self.instance.lock().await.leave(self.id, self.body_id, &self.nickname).await?;
+                            self.instance.lock().await.leave(self.id, self.body_id).await?;
                             return Ok(());
                         }
                         _ => {
                             spacebuild_log!(info, self.address, "Unexpected message type received: closing client");
-                            self.instance.lock().await.leave(self.id, self.body_id, &self.nickname).await?;
+                            self.instance.lock().await.leave(self.id, self.body_id).await?;
                             return Ok(());
                         }
                     }

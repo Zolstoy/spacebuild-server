@@ -71,6 +71,7 @@ impl Player {
         }
 
         if !self.actions.is_empty() || !self.initialized {
+            spacebuild_log!(trace, "player debug", "sending");
             let result = self
                 .infos_sender
                 .send(GameInfo::Player(PlayerInfo {
@@ -107,13 +108,19 @@ impl Player {
             });
 
             if bodies.len() == 50 {
-                let _ = self.infos_sender.send(GameInfo::BodiesInSystem(bodies.clone())).await;
+                let result = self.infos_sender.send(GameInfo::BodiesInSystem(bodies.clone())).await;
+                if result.is_err() {
+                    spacebuild_log!(warn, self.nickname, "Failed to send bodies in system info");
+                }
                 bodies.clear();
             }
         }
 
         if !bodies.is_empty() {
-            let _ = self.infos_sender.send(GameInfo::BodiesInSystem(bodies.clone())).await;
+            let result = self.infos_sender.send(GameInfo::BodiesInSystem(bodies.clone())).await;
+            if result.is_err() {
+                spacebuild_log!(warn, self.nickname, "Failed to send bodies in system info");
+            }
         }
 
         (coords, direction, speed)
