@@ -135,4 +135,9 @@ impl PlayerCache {
             .insert_row_into("Player", vec![id.to_string()], vec![])
             .await;
     }
+
+    pub async fn sync_and_unload(&mut self, id: u32) {
+        self.sync(id);
+        self.players.remove(&id);
+    }
 }

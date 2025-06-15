@@ -106,14 +106,14 @@ impl Instance {
         &mut self.galaxy
     }
 
-    pub async fn leave(&mut self, id: u32, body_id: u32) -> Result<()> {
+    pub async fn leave(&mut self, id: u32) {
         spacebuild_log!(info, "instance", "Leave for {}", id);
 
-        self.players.
+        self.players.sync_and_unload(id);
     }
 
     pub async fn authenticate(&mut self, nickname: &String) -> Result<(u32, u32, Receiver<GameState>)> {
-        let maybe_id = self.load_player_by_nickname(nickname.clone()).await;
+        let maybe_id = self.players.load_by_nickname(nickname.clone()).await;
 
         match maybe_id {
             Err(Error::DbLoadPlayerByNicknameNotFound) => {
