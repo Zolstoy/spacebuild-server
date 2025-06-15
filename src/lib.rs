@@ -84,7 +84,9 @@ mod test_01_body_cache {
         }
         let pool = SqlitePool::connect(&db_path).await.unwrap();
         let db = SqlDb::new(pool);
-        BodyCache::new(Arc::new(Mutex::new(db)))
+        let mut cache = BodyCache::new(Arc::new(Mutex::new(db)));
+        cache.init_db().await;
+        cache
     }
 
     #[tokio::test]
