@@ -3,15 +3,15 @@ use crate::Result;
 use sqlx::sqlite::SqliteRow;
 use sqlx::{Pool, Sqlite};
 
-pub struct SqlDatabase {
+pub struct SqlDb {
     pub(crate) pool: Pool<Sqlite>,
 }
 
-impl SqlDatabase {
+impl SqlDb {
     pub async fn create_table(&mut self, name: &str, entries: Vec<&str>, indexes: Vec<&str>) -> Result<()> {
         if self
             .select_from_where_equals("sqlite_master ", "name", name)
-            .await?
+            .await
             .len()
             > 0
         {
@@ -38,21 +38,15 @@ impl SqlDatabase {
         }
         Ok(())
     }
-    pub async fn select_from_where_equals(
-        &mut self,
-        table_name: &str,
-        column_name: &str,
-        value: &str,
-    ) -> Result<Vec<SqliteRow>> {
-        let rows = sqlx::query(format!("SELECT * FROM {} WHERE {}=?", table_name, column_name).as_str())
+    pub async fn select_from_where_equals(&self, table_name: &str, column_name: &str, value: &str) -> Vec<SqliteRow> {
+        sqlx::query(format!("SELECT * FROM {} WHERE {}=?", table_name, column_name).as_str())
             .bind(value)
             .fetch_all(&self.pool)
             .await
             .map_err(|err| {
                 Error::DbSelectFromWhereError(table_name.to_string(), format!("{}={}", column_name, value), err)
-            })?;
-
-        Ok(rows)
+            })
+            .unwrap()
     }
 
     fn vec_to_insert_str(table_name: &str, values: Vec<Vec<String>>, upserts: Vec<(&str, &str)>) -> String {
@@ -87,37 +81,26 @@ impl SqlDatabase {
         }
     }
 
-    pub async fn max_in(&mut self, table_name: &str, column_name: &str) -> Result<Option<u32>> {
-        let result: sqlx::Result<i64> =
-            sqlx::query_scalar(format!("SELECT MAX({}) FROM {}", column_name, table_name).as_str())
-                .fetch_one(&self.pool)
-                .await;
-
-        match result {
-            Err(sqlx::Error::RowNotFound) => Ok(None),
-            Err(err) => Err(Error::DbLastIdError(err)),
-            Ok(id) => Ok(Some(id as u32)),
-        }
+    pub async fn last_insert_id(&self) -> u32 {
+        sqlx::query("SELECT last_insert_rowid()")
+            .execute(&self.pool)
+            .await
+            .unwrap()
+            .last_insert_rowid() as u32
     }
 
-    pub async fn insert_row_into(
-        &mut self,
-        table_name: &str,
-        row: Vec<String>,
-        upserts: Vec<(&str, &str)>,
-    ) -> Result<()> {
+    pub async fn insert_row_into(&mut self, table_name: &str, row: Vec<String>, upserts: Vec<(&str, &str)>) -> u32 {
         let insert_sql_str = Self::vec_to_insert_str(table_name, vec![row], upserts);
 
         sqlx::query(&insert_sql_str)
             .execute(&self.pool)
             .await
-            .map_err(|err| Error::SqlDbInsertError(insert_sql_str, err))?;
-
-        Ok(())
+            .unwrap()
+            .last_insert_rowid() as u32
     }
 
     pub async fn insert_rows_into(
-        &mut self,
+        &self,
         table_name: &str,
         values: Vec<Vec<String>>,
         upserts: Vec<(&str, &str)>,

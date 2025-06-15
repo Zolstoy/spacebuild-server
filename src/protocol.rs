@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
+use crate::body::Body;
 use crate::error::Error;
 use crate::Result;
 
@@ -41,14 +42,25 @@ pub struct PlayerInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct BodyInfo {
+pub struct BodyState {
+    pub id: u32,
     pub coords: [f64; 3],
     pub rotating_speed: f64,
     pub gravity_center: u32,
-    pub id: u32,
-    pub element_type: String,
+    pub body_type: String,
 }
 
+impl From<Body> for BodyState {
+    fn from(value: Body) -> Self {
+        Self {
+            id: value.id,
+            coords: [value.coords.x, value.coords.y, value.coords.z],
+            gravity_center: value.gravity_center,
+            rotating_speed: value.rotating_speed,
+            body_type: value.body_type.to_string(),
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct AuthInfo {
     pub(crate) success: bool,
@@ -56,8 +68,7 @@ pub struct AuthInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum GameInfo {
+pub enum GameState {
     Player(PlayerInfo),
-    BodiesInSystem(Vec<BodyInfo>),
-    // PlayersInSystem(Vec<PlayerInfo>),
+    BodiesInSystem(Vec<BodyState>),
 }

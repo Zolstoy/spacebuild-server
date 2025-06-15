@@ -1,8 +1,7 @@
 use crate::error::Error;
-use crate::game::entity::Entity;
 use crate::instance::Instance;
 use crate::protocol::AuthInfo;
-use crate::protocol::GameInfo;
+use crate::protocol::GameState;
 use crate::protocol::PlayerAction;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -19,24 +18,24 @@ extern crate scopeguard;
 use crate::spacebuild_log;
 use crate::Result;
 
-pub(crate) struct Client<S>
+pub(crate) struct Service<S>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
-    websocket: WebSocketStream<S>,
-    instance: Arc<Mutex<Instance>>,
     id: u32,
-    address: SocketAddr,
     nickname: String,
     body_id: u32,
+    websocket: WebSocketStream<S>,
+    address: SocketAddr,
+    instance: Arc<Mutex<Instance>>,
 }
 
-impl<S> Client<S>
+impl<S> Service<S>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
-    pub fn new(websocket: WebSocketStream<S>, instance: Arc<Mutex<Instance>>, address: SocketAddr) -> Client<S> {
-        Client::<S> {
+    pub fn new(websocket: WebSocketStream<S>, instance: Arc<Mutex<Instance>>, address: SocketAddr) -> Service<S> {
+        Service::<S> {
             websocket,
             instance,
             id: u32::MAX,
@@ -46,7 +45,7 @@ where
         }
     }
 
-    async fn handle_message_for_auth(&mut self, message: Message) -> Result<Receiver<GameInfo>> {
+    async fn handle_message_for_auth(&mut self, message: Message) -> Result<Receiver<GameState>> {
         match message {
             Message::Text(msg) => {
                 let maybe_action: serde_json::Result<PlayerAction> = serde_json::from_str(msg.as_str());
@@ -102,7 +101,7 @@ where
         }
     }
 
-    async fn handle_message_for_gameplay(&mut self, recv: Receiver<GameInfo>) -> Result<()> {
+    async fn handle_message_for_gameplay(&mut self, recv: Receiver<GameState>) -> Result<()> {
         let mut stream = ReceiverStream::new(recv);
 
         loop {
@@ -138,17 +137,17 @@ where
                             let action = maybe_action.unwrap();
 
                             if let PlayerAction::ShipState(_state) = &action {
-                                let mut instance = self.instance.lock().await;
-                                let maybe_element = instance.borrow_galaxy_mut().borrow_body_mut(self.body_id);
-                                if let Some(maybe_player) = maybe_element {
-                                    if let Entity::Player(player) =
-                                        &mut maybe_player.entity
-                                    {
-                                        player.actions.push(action);
-                                    }
-                                } else {
-                                    panic!("Can't find player {}", self.id);
-                                }
+                                // let mut instance = self.instance.lock().await;
+                                // let maybe_element = instance.borrow_galaxy_mut().borrow_body_mut(self.body_id);
+                                // if let Some(maybe_player) = maybe_element {
+                                //     if let Entity::Player(player) =
+                                //         &mut maybe_player.entity
+                                //     {
+                                //         player.actions.push(action);
+                                //     }
+                                // } else {
+                                //     panic!("Can't find player {}", self.id);
+                                // }
                             } else {
                                 return Ok(())
                             }

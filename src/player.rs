@@ -1,20 +1,18 @@
 use scilib::coordinate::cartesian::Cartesian;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
-    game::celestial_body::Body,
-    protocol::{BodyInfo, GameInfo, PlayerAction, PlayerInfo},
+    protocol::{GameState, PlayerAction, PlayerInfo},
     spacebuild_log,
 };
 
-#[derive(Clone, Debug)]
 pub struct Player {
     pub(crate) id: u32,
     pub(crate) nickname: String,
-    pub(crate) _ownings: Vec<u32>,
-    pub(crate) actions: Vec<PlayerAction>,
-    pub(crate) infos_sender: Sender<GameInfo>,
-    pub(crate) initialized: bool,
+    pub(crate) coords: Cartesian,
+    pub(crate) action_recv: Receiver<PlayerAction>,
+    pub(crate) game_info_send: Sender<GameState>,
+    pub(crate) first_state_sent: bool,
 }
 
 impl PartialEq for Player {
@@ -28,17 +26,6 @@ impl Player {
         &self.nickname
     }
 
-    pub fn new(id: u32, nickname: String, infos_sender: Sender<GameInfo>) -> Player {
-        Player {
-            id,
-            actions: Vec::default(),
-            infos_sender,
-            nickname,
-            _ownings: Vec::default(),
-            initialized: false,
-        }
-    }
-
     pub async fn update(
         &mut self,
         coordinates: Cartesian,
@@ -48,7 +35,7 @@ impl Player {
     ) -> (Cartesian, Cartesian, f64) {
         let mut direction = Cartesian::default();
 
-        for action in &self.actions {
+        for action in &self.action_recv {
             match action {
                 PlayerAction::ShipState(ship_state) => {
                     if ship_state.throttle_up {
@@ -70,11 +57,11 @@ impl Player {
             coords += direction / direction.norm() * speed * delta;
         }
 
-        if !self.actions.is_empty() || !self.initialized {
+        if !self.action_recv.is_empty() || !self.first_state_sent {
             spacebuild_log!(trace, "player debug", "sending");
             let result = self
-                .infos_sender
-                .send(GameInfo::Player(PlayerInfo {
+                .infos_send
+                .send(GameState::Player(PlayerInfo {
                     coords: [coords.x, coords.y, coords.z],
                 }))
                 .await;
@@ -84,10 +71,10 @@ impl Player {
             }
         }
 
-        if !self.initialized {
-            self.initialized = true
+        if !self.first_state_sent {
+            self.first_state_sent = true
         }
-        self.actions.clear();
+        self.action_recv.clear();
 
         let mut bodies = Vec::new();
 
@@ -99,16 +86,10 @@ impl Player {
                 super::Entity::Planet(_) => "Planet",
                 super::Entity::Moon(_) => "Moon",
             };
-            bodies.push(BodyInfo {
-                coords: [celestial.coords.x, celestial.coords.y, celestial.coords.z],
-                id: celestial.id,
-                element_type: element_type.to_string(),
-                gravity_center: celestial.gravity_center,
-                rotating_speed: celestial.rotating_speed,
-            });
+            bodies.push(celestial.into());
 
             if bodies.len() == 50 {
-                let result = self.infos_sender.send(GameInfo::BodiesInSystem(bodies.clone())).await;
+                let result = self.infos_send.send(GameState::BodiesInSystem(bodies.clone())).await;
                 if result.is_err() {
                     spacebuild_log!(warn, self.nickname, "Failed to send bodies in system info");
                 }
@@ -117,7 +98,7 @@ impl Player {
         }
 
         if !bodies.is_empty() {
-            let result = self.infos_sender.send(GameInfo::BodiesInSystem(bodies.clone())).await;
+            let result = self.infos_send.send(GameState::BodiesInSystem(bodies.clone())).await;
             if result.is_err() {
                 spacebuild_log!(warn, self.nickname, "Failed to send bodies in system info");
             }

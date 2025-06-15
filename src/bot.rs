@@ -1,6 +1,6 @@
 use crate::error::Error;
-use crate::network::tls::{get_connector, ClientPki};
-use crate::protocol::{GameInfo, IntoMessage, PlayerInfo, ShipState};
+use crate::protocol::{GameState, IntoMessage, PlayerInfo, ShipState};
+use crate::tls::{get_connector, ClientPki};
 use crate::{
     protocol::{AuthInfo, Login, PlayerAction},
     Result,
@@ -80,7 +80,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         Ok(())
     }
 
-    pub async fn next_game_info(&mut self) -> Result<GameInfo> {
+    pub async fn next_game_info(&mut self) -> Result<GameState> {
         let next = self.next_message().await?;
 
         match next {
@@ -99,7 +99,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         loop {
             let game_info = self.next_game_info().await?;
 
-            if let GameInfo::Player(player) = game_info {
+            if let GameState::Player(player) = game_info {
                 return Ok(player);
             }
         }

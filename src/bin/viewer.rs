@@ -20,7 +20,7 @@ use ratatui::{
 use spacebuild::{
     bot::{self, Bot},
     network::tls::ClientPki,
-    protocol::{BodyInfo, GameInfo},
+    protocol::{BodyState, GameState},
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -80,8 +80,8 @@ async fn run<S: AsyncRead + AsyncWrite + Unpin>(mut client: Bot<S>) -> Result<()
 struct App {
     should_quit: bool,
     cursor: (u16, u16),
-    celestials: HashMap<u32, spacebuild::protocol::BodyInfo>,
-    star: BodyInfo,
+    celestials: HashMap<u32, spacebuild::protocol::BodyState>,
+    star: BodyState,
     list_scroll: usize,
     list_area: Rect,
     draw_zoom: f64,
@@ -116,10 +116,10 @@ impl App {
                 },
                 Ok(game_info) = client.next_game_info() => {
                     match game_info {
-                        GameInfo::Player(_player_info) => {
+                        GameState::Player(_player_info) => {
 
                         },
-                        GameInfo::BodiesInSystem(bodies) => {
+                        GameState::BodiesInSystem(bodies) => {
                             for body in bodies {
                                 if body.element_type == "Star" {
                                     self.star = body.clone();

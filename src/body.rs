@@ -1,5 +1,7 @@
 use rstar::{RTreeObject, AABB};
 use scilib::coordinate::cartesian::Cartesian;
+use sqlx::sqlite::SqliteRow;
+use sqlx::Row;
 
 #[derive(Clone, Debug)]
 pub struct Body {
@@ -24,5 +26,21 @@ impl RTreeObject for Body {
 
     fn envelope(&self) -> Self::Envelope {
         AABB::from_point([self.coords.x, self.coords.y, self.coords.z])
+    }
+}
+
+impl From<&SqliteRow> for Body {
+    fn from(value: &SqliteRow) -> Self {
+        Body {
+            id: value.get(1),
+            coords: Cartesian {
+                x: value.get(2),
+                y: value.get(3),
+                z: value.get(4),
+            },
+            rotating_speed: value.get(5),
+            gravity_center: value.get(6),
+            body_type: value.get(7),
+        }
     }
 }

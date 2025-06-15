@@ -1,38 +1,39 @@
+use crate::cache::BodyCache;
+use crate::cache::PlayerCache;
 use crate::error::Error;
-use crate::game::body::Body;
-use crate::game::entity::Entity;
-use crate::game::galaxy::Galaxy;
-use crate::protocol::GameInfo;
+use crate::galaxy::Galaxy;
+use crate::protocol::GameState;
 use crate::spacebuild_log;
-use crate::sql_database::SqlDatabase;
-use crate::sync_pool::SyncPool;
+use crate::sqldb::SqlDb;
 use crate::Result;
-use is_printable::IsPrintable;
 use rand::prelude::*;
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use scilib::coordinate::cartesian::Cartesian;
 use scilib::coordinate::spherical::Spherical;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use std::f64::consts::{PI, TAU};
 use std::fs::File;
 use std::path::Path;
+use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver};
+use tokio::sync::Mutex;
 
 pub struct Instance {
-    pub(crate) sync_pool: SyncPool,
+    pub(crate) bodies: BodyCache,
     pub(crate) galaxy: Galaxy,
+    pub(crate) players: PlayerCache,
 }
 
 impl Instance {
-    pub async fn save_all(&mut self) -> Result<()> {
-        self.sync_pool.save().await?;
-        Ok(())
+    pub async fn save_all(&mut self) -> () {
+        self.bodies.save().await;
     }
 
     pub async fn update(&mut self, delta: f64) {
         self.galaxy.update(delta).await;
-        self.sync_pool.sync(self.galaxy.borrow_bodies());
+        self.bodies.sync(self.galaxy.borrow_bodies());
     }
 
     pub async fn from_path(db_path: &'_ str) -> Result<Instance> {
@@ -44,16 +45,24 @@ impl Instance {
             .await
             .map_err(|err| Error::DbOpenError(db_path.to_string(), err))?;
 
-        let mut db = SqlDatabase { pool };
+        let mut db = SqlDb { pool };
         Instance::init_db(&mut db).await?;
 
+        let db = Arc::new(Mutex::new(db));
         Ok(Instance {
-            sync_pool: SyncPool::new(db).await?,
+            bodies: BodyCache {
+                bodies: HashMap::new(),
+                db: db.clone(),
+            },
             galaxy: Galaxy::default(),
+            players: PlayerCache {
+                players: HashMap::new(),
+                db,
+            },
         })
     }
 
-    pub(crate) async fn init_db(db: &mut SqlDatabase) -> Result<()> {
+    pub(crate) async fn init_db(db: &mut SqlDb) -> Result<()> {
         db.create_table(
             "Body",
             vec![
@@ -81,10 +90,8 @@ impl Instance {
                 "direction_x REAL",
                 "direction_y REAL",
                 "direction_z REAL",
-                "body_id INTEGER",
-                "FOREIGN KEY (body_id) REFERENCES Body (id)",
             ],
-            vec!["id", "body_id", "nickname"],
+            vec!["id", "nickname"],
         )
         .await?;
 
@@ -99,73 +106,13 @@ impl Instance {
         &mut self.galaxy
     }
 
-    pub async fn load_player_by_nickname(&mut self, nickname: String) -> Result<(u32, u32, Receiver<GameInfo>)> {
-        if nickname.is_empty() || !nickname.is_printable() {
-            return Err(Error::InvalidNickname);
-        }
-
-        for celestial in &self.galaxy.celestials {
-            if let Entity::Player(player) = &celestial.entity {
-                if player.nickname == nickname {
-                    return Err(Error::PlayerAlreadyAuthenticated);
-                }
-            }
-        }
-
-        let (send, recv) = mpsc::channel(10000);
-        let player = self.sync_pool.get_player(&nickname, send).await?;
-
-        let star = self.sync_pool.get_body(player.gravity_center).await?;
-        let rotatings = self.sync_pool.get_rotatings(star.id).await?;
-
-        let body_id = player.id;
-        let player_id = if let Entity::Player(player_entity) = &player.entity {
-            player_entity.id
-        } else {
-            unreachable!();
-        };
-
-        self.galaxy.celestials.insert(player);
-
-        for rotating in rotatings {
-            self.galaxy.celestials.insert(rotating);
-        }
-
-        Ok((player_id, body_id, recv))
-    }
-
     pub async fn leave(&mut self, id: u32, body_id: u32) -> Result<()> {
         spacebuild_log!(info, "instance", "Leave for {}", id);
-        let maybe_player = self.galaxy.celestials.iter_mut().find(|c| {
-            if let Entity::Player(player_entity) = &c.entity {
-                player_entity.id == id
-            } else {
-                false
-            }
-        });
 
-        if let Some(player) = maybe_player {
-            let player = player.clone();
-            let maybe_removed = self.galaxy.celestials.remove(&player);
-
-            if let Some(mut removed) = maybe_removed {
-                if let Entity::Player(player) = &mut removed.entity {
-                    player.actions.clear();
-                    self.sync_pool.save_and_unload_player(body_id).await?;
-                } else {
-                    panic!("ID NOT PLAYER");
-                }
-            } else {
-                panic!("COULD NOT REMOVE PLAYER FROM TREE");
-            }
-        } else {
-            panic!("PLAYER NOT FOUND IN RTREE");
-        }
-
-        Ok(())
+        self.players.
     }
 
-    pub async fn authenticate(&mut self, nickname: &String) -> Result<(u32, u32, Receiver<GameInfo>)> {
+    pub async fn authenticate(&mut self, nickname: &String) -> Result<(u32, u32, Receiver<GameState>)> {
         let maybe_id = self.load_player_by_nickname(nickname.clone()).await;
 
         match maybe_id {
@@ -189,7 +136,7 @@ impl Instance {
 
                 let (send, recv) = mpsc::channel(10000);
 
-                let mut player = self.sync_pool.new_player(&nickname, send);
+                let mut player = self.bodies.new_player(&nickname, send);
                 player.coords = player_coords;
                 player.local_speed = 100f64;
                 player.gravity_center = star_id;
@@ -217,7 +164,7 @@ impl Instance {
         let distance = rng.random_range(10000f64..100000f64);
         let coords = Cartesian::from_coord(Spherical::from(distance, theta, phi));
 
-        let mut star = self.sync_pool.new_star();
+        let mut star = self.bodies.new_star();
 
         star.coords = coords.clone();
         star.rotating_speed = 1000f64;
@@ -227,7 +174,7 @@ impl Instance {
         let nb_planets = rng.random_range(5..15);
 
         for _ in 0..nb_planets {
-            let mut planet = self.sync_pool.new_planet();
+            let mut planet = self.bodies.new_planet();
             planet.rotating_speed = rng.random_range(0.001..0.01);
             let phi = rng.random_range(-TAU..TAU);
             let theta = rng.random_range(PI - 0.1..PI + 0.1);
@@ -241,7 +188,7 @@ impl Instance {
             let nb_moons = rng.random_range(0..3);
 
             for _ in 0..nb_moons {
-                let mut moon = self.sync_pool.new_moon();
+                let mut moon = self.bodies.new_moon();
                 moon.rotating_speed = rng.random_range(0.001..0.01);
                 let phi = rng.random_range(-TAU..TAU);
                 let theta = rng.random_range(PI - 0.1..PI + 0.1);
@@ -259,7 +206,7 @@ impl Instance {
 
         let nb_asteroids = rng.random_range(500..2500);
 
-        let mut asteroids = self.sync_pool.new_asteroids(nb_asteroids);
+        let mut asteroids = self.bodies.new_asteroids(nb_asteroids);
 
         for asteroid in &mut asteroids {
             asteroid.rotating_speed = rng.random_range(0.001..0.01);

@@ -1,12 +1,18 @@
 #![forbid(unsafe_code)]
 
+pub mod body;
 pub mod bot;
 pub mod cache;
 pub mod error;
+pub mod galaxy;
+pub mod http;
 pub mod instance;
+pub mod player;
 pub mod protocol;
 pub mod server;
-pub mod sql_database;
+pub mod service;
+pub mod sqldb;
+pub mod tls;
 
 #[cfg(feature = "tracing")]
 pub mod tracing;
@@ -22,7 +28,7 @@ macro_rules! spacebuild_log {
             let level_str = stringify!($level);
             let color_level = match level_str {
                 "trace" => (140, 140, 140),
-                "debug" => (181, 172, 7),
+                "debug" => (150, 172, 100),
                 "info" => (240, 240, 240),
                 "warn" => (237, 99, 0),
                 "error" => (219, 9, 23),

@@ -1,4 +1,4 @@
-use super::{body::Body, entity::Entity};
+use super::body::Body;
 use crate::spacebuild_log;
 use core::f64;
 use rstar::{RTree, AABB};
@@ -60,15 +60,16 @@ impl Galaxy {
 
             let gravity_center = celestials.iter().find(|g| g.id == celestial.gravity_center);
 
-            if let Entity::Player(player) = &mut celestial.entity {
-                let env = Self::galactics_in_spherical_view(&old_rtree, celestial.coords, 10000f64);
+            // if let Entity::Player(player) = &mut celestial.entity {
+            //     let env = Self::galactics_in_spherical_view(&old_rtree, celestial.coords, 10000f64);
 
-                let (coords, direction, _speed) =
-                    player.update(celestial.coords, celestial.local_speed, delta, env).await;
+            //     let (coords, direction, _speed) =
+            //         player.update(celestial.coords, celestial.local_speed, delta, env).await;
 
-                celestial.coords = coords;
-                celestial.local_direction = direction;
-            } else if let Some(gravity_center) = gravity_center {
+            //     celestial.coords = coords;
+            //     celestial.local_direction = direction;
+            // } else
+            if let Some(gravity_center) = gravity_center {
                 let local_coordinates_car = celestial.coords - gravity_center.coords;
                 let local_coordinates_sph = Spherical::from_coord(local_coordinates_car);
                 let mut new_coordinates_sph = local_coordinates_sph.clone();

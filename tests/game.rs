@@ -9,7 +9,7 @@ mod spacebuild_tests_game {
     use futures_time::{future::FutureExt, time::Duration};
     use scilib::coordinate::cartesian::Cartesian;
     use spacebuild::{
-        bot, instance::Instance, network::tls::ServerPki, protocol::GameInfo, server, spacebuild_log, tracing,
+        bot, instance::Instance, network::tls::ServerPki, protocol::GameState, server, spacebuild_log, tracing,
     };
     use tokio::{net::TcpListener, sync::Mutex, time::sleep};
     use uuid::Uuid;
@@ -287,7 +287,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         test!(client.login("test213"))?;
         let game_info = test!(client.next_game_info())?;
         match game_info {
-            GameInfo::Player(player_info) => {
+            GameState::Player(player_info) => {
                 assert!(player_info.coords[0].is_normal());
                 assert!(player_info.coords[1].is_normal());
                 assert!(player_info.coords[2].is_normal());
@@ -307,7 +307,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         test!(client.login("test213"))?;
         let game_info = test!(client.next_game_info())?;
         let coords = match game_info {
-            GameInfo::Player(player_info) => {
+            GameState::Player(player_info) => {
                 assert!(player_info.coords[0].is_normal());
                 assert!(player_info.coords[1].is_normal());
                 assert!(player_info.coords[2].is_normal());
@@ -317,7 +317,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         };
         let game_info = test!(client.next_game_info())?;
         match game_info {
-            GameInfo::BodiesInSystem(_bodies) => {}
+            GameState::BodiesInSystem(_bodies) => {}
             _ => unreachable!(),
         }
 
@@ -327,7 +327,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
 
         let mut i = 0;
         let coords_later = loop {
-            if let GameInfo::Player(player_info) = test!(client.next_game_info())? {
+            if let GameState::Player(player_info) = test!(client.next_game_info())? {
                 assert!(player_info.coords[0].is_normal());
                 assert!(player_info.coords[1].is_normal());
                 assert!(player_info.coords[2].is_normal());
@@ -357,7 +357,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         client.login("test213").await?;
         let game_info = client.next_game_info().await?;
 
-        let mut coords = if let GameInfo::Player(player_info) = game_info {
+        let mut coords = if let GameState::Player(player_info) = game_info {
             player_info.coords
         } else {
             unreachable!();
