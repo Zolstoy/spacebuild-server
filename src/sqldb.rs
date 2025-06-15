@@ -99,19 +99,10 @@ impl SqlDb {
             .last_insert_rowid() as u32
     }
 
-    pub async fn insert_rows_into(
-        &self,
-        table_name: &str,
-        values: Vec<Vec<String>>,
-        upserts: Vec<(&str, &str)>,
-    ) -> Result<()> {
-        let insert_sql_str = Self::vec_to_insert_str(table_name, values, upserts);
-
-        sqlx::query(&insert_sql_str)
+    pub async fn insert_rows_into(&self, table_name: &str, values: Vec<Vec<String>>, upserts: Vec<(&str, &str)>) {
+        sqlx::query(&Self::vec_to_insert_str(table_name, values, upserts))
             .execute(&self.pool)
             .await
-            .map_err(|err| Error::SqlDbInsertError(insert_sql_str, err))?;
-
-        Ok(())
+            .unwrap();
     }
 }

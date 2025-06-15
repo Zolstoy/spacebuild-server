@@ -55,7 +55,7 @@ use test_helpers_async::*;
 
 #[before_all]
 #[cfg(test)]
-mod tests_sync_pool {
+mod tests_cache {
     use std::env;
 
     use uuid::Uuid;

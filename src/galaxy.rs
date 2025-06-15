@@ -1,7 +1,7 @@
 use super::body::Body;
 use crate::spacebuild_log;
 use core::f64;
-use rstar::{RTree, AABB};
+use rstar::RTree;
 use scilib::coordinate::{cartesian::Cartesian, spherical::Spherical};
 use std::f64::consts::PI;
 
@@ -31,18 +31,18 @@ impl Galaxy {
     //     self.celestials.remove(&CelestialBody::dummy(id))
     // }
 
-    fn galactics_in_spherical_view(tree: &RTree<Body>, center: Cartesian, radius: f64) -> Vec<&Body> {
-        let radius_sq = radius * radius;
-        let min = [center.x - radius, center.y - radius, center.z - radius];
-        let max = [center.x + radius, center.y + radius, center.z + radius];
-        tree.locate_in_envelope_intersecting(&AABB::from_corners(min, max))
-            .filter(|g| {
-                let d_sq =
-                    (g.coords.x - center.x).powi(2) + (g.coords.y - center.y).powi(2) + (g.coords.z - center.z).powi(2);
-                d_sq <= radius_sq
-            })
-            .collect()
-    }
+    // fn galactics_in_spherical_view(tree: &RTree<Body>, center: Cartesian, radius: f64) -> Vec<&Body> {
+    //     let radius_sq = radius * radius;
+    //     let min = [center.x - radius, center.y - radius, center.z - radius];
+    //     let max = [center.x + radius, center.y + radius, center.z + radius];
+    //     tree.locate_in_envelope_intersecting(&AABB::from_corners(min, max))
+    //         .filter(|g| {
+    //             let d_sq =
+    //                 (g.coords.x - center.x).powi(2) + (g.coords.y - center.y).powi(2) + (g.coords.z - center.z).powi(2);
+    //             d_sq <= radius_sq
+    //         })
+    //         .collect()
+    // }
 
     pub async fn update(&mut self, mut delta: f64) {
         delta *= 10f64;

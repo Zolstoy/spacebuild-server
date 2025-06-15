@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 extern crate scopeguard;
 use crate::spacebuild_log;
 
-pub fn run_http<T>(stream: T, instance: Arc<Mutex<Instance>>, address: SocketAddr)
+pub fn run<T>(stream: T, instance: Arc<Mutex<Instance>>, address: SocketAddr)
 where
     T: tokio::io::AsyncRead + tokio::io::AsyncWrite + std::marker::Unpin + std::marker::Send + 'static,
 {
@@ -26,7 +26,7 @@ where
                 io,
                 service_fn(move |req: Request<hyper::body::Incoming>| {
                     let instance = Arc::clone(&instance);
-                    serve_http(req, instance, address)
+                    serve(req, instance, address)
                 }),
             )
             .with_upgrades()
@@ -39,7 +39,7 @@ where
     });
 }
 
-pub async fn serve_http(
+pub async fn serve(
     mut request: Request<hyper::body::Incoming>,
     instance: Arc<Mutex<Instance>>,
     address: SocketAddr,

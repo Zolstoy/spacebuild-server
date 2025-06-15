@@ -1,8 +1,8 @@
 use crate::error::Error;
-use crate::protocol::{GameState, IntoMessage, PlayerInfo, ShipState};
+use crate::protocol::{State, IntoMessage, PlayerState, ShipState};
 use crate::tls::{get_connector, ClientPki};
 use crate::{
-    protocol::{AuthInfo, Login, PlayerAction},
+    protocol::{Action, AuthState, Login},
     Result,
 };
 use futures::SinkExt;
@@ -43,7 +43,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
     }
 
     pub async fn login(&mut self, nickname: &str) -> Result<u32> {
-        self.send_action(PlayerAction::Login(Login {
+        self.send_action(Action::Login(Login {
             nickname: nickname.to_string(),
         }))
         .await?;
@@ -51,7 +51,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         let response = self.next_message().await?;
         match response {
             Message::Text(response_str) => {
-                let login_info: AuthInfo = serde_json::from_str(&response_str)
+                let login_info: AuthState = serde_json::from_str(&response_str)
                     .map_err(|err| Error::DeserializeAuthenticationResponseError(err, response_str.to_string()))?;
 
                 let uuid = u32::from_str(login_info.message.as_str())
@@ -72,7 +72,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
     }
 
     pub async fn move_in_space(&mut self, direction: Cartesian) -> Result<()> {
-        self.send_action(PlayerAction::ShipState(ShipState {
+        self.send_action(Action::ShipState(ShipState {
             throttle_up: true,
             direction: [direction.x, direction.y, direction.z],
         }))
@@ -80,7 +80,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         Ok(())
     }
 
-    pub async fn next_game_info(&mut self) -> Result<GameState> {
+    pub async fn next_game_info(&mut self) -> Result<State> {
         let next = self.next_message().await?;
 
         match next {
@@ -95,11 +95,11 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         }
     }
 
-    pub async fn until_player_info(&mut self) -> Result<PlayerInfo> {
+    pub async fn until_player_info(&mut self) -> Result<PlayerState> {
         loop {
             let game_info = self.next_game_info().await?;
 
-            if let GameState::Player(player) = game_info {
+            if let State::Player(player) = game_info {
                 return Ok(player);
             }
         }

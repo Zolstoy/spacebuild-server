@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::protocol::{GameState, PlayerAction};
+use crate::protocol::{Action, State};
 use crate::Result;
 use crate::{body::Body, player::Player, sqldb::SqlDb};
 use is_printable::IsPrintable;
@@ -17,25 +17,18 @@ pub struct BodyCache {
 impl BodyCache {
     pub async fn get_body(&mut self, id: u32) -> &Body {
         self.bodies.get(&id).unwrap()
-        // let maybe_body = self.bodies.get(&id);
-        // let body = if maybe_body.is_some() {
-        //     return maybe_body.unwrap();
-        // } else {
-        //     self.add_body(id, self.load_body(id).await)
-        // };
-        // body
     }
 
-    async fn load_body(&self, id: u32) -> Body {
-        self.db
-            .lock()
-            .await
-            .select_from_where_equals("Body", "id", id.to_string().as_str())
-            .await
-            .first()
-            .unwrap()
-            .into()
-    }
+    // async fn load_body(&self, id: u32) -> Body {
+    //     self.db
+    //         .lock()
+    //         .await
+    //         .select_from_where_equals("Body", "id", id.to_string().as_str())
+    //         .await
+    //         .first()
+    //         .unwrap()
+    //         .into()
+    // }
 
     fn add_body(&mut self, id: u32, body: Body) -> &Body {
         self.bodies.insert(id, body);
@@ -57,7 +50,7 @@ impl BodyCache {
             ]);
         }
         if !rows.is_empty() {
-            self.db.lock().await.insert_rows_into("Body", rows, vec![]);
+            self.db.lock().await.insert_rows_into("Body", rows, vec![]).await;
         }
     }
 
@@ -67,12 +60,12 @@ impl BodyCache {
         }
     }
 
-    pub(crate) async fn new_body(&mut self, body_type: u8) {
+    pub(crate) async fn new_body(&mut self, body_type: u8) -> &mut Body {
         let mut new_body = Body {
             body_type,
             ..Default::default()
         };
-        {
+        let id = {
             let mut db = self.db.lock().await;
             db.insert_row_into(
                 "Body",
@@ -86,10 +79,39 @@ impl BodyCache {
                     0.to_string(),
                 ],
                 vec![],
-            );
+            )
+            .await;
             new_body.id = db.last_insert_id().await;
-        }
+            new_body.id
+        };
         self.add_body(new_body.id, new_body);
+        self.bodies.get_mut(&id).unwrap()
+    }
+
+    pub(crate) async fn new_bodies(&mut self, body_type: u8, cnt: i32) -> u32 {
+        let mut new_bodies: Vec<Body> = Vec::new();
+        let mut bodies_rows = Vec::new();
+        for _ in 0..cnt {
+            let new_body = Body {
+                body_type,
+                ..Default::default()
+            };
+            bodies_rows.push(vec![0.to_string(), body_type.to_string()]);
+            new_bodies.push(new_body);
+        }
+        let last_id = {
+            let db = self.db.lock().await;
+            db.insert_rows_into("Body", bodies_rows, vec![]).await;
+            db.last_insert_id().await
+        };
+        for i in cnt..0 {
+            new_bodies.get_mut(i as usize).unwrap().id = last_id - (i as u32);
+        }
+        for i in 0..cnt {
+            let body = new_bodies.get(i as usize).unwrap();
+            self.bodies.insert(body.id, body.clone());
+        }
+        last_id
     }
 }
 
@@ -99,10 +121,7 @@ pub struct PlayerCache {
 }
 
 impl PlayerCache {
-    pub async fn load_by_nickname(
-        &mut self,
-        nickname: String,
-    ) -> Result<(u32, Sender<PlayerAction>, Receiver<GameState>)> {
+    pub async fn load_by_nickname(&mut self, nickname: String) -> Result<(u32, Sender<Action>, Receiver<State>)> {
         if nickname.is_empty() || !nickname.is_printable() {
             return Err(Error::InvalidNickname);
         }
@@ -128,7 +147,7 @@ impl PlayerCache {
                 nickname,
                 coords: Cartesian::default(),
                 action_recv,
-                game_info_send,
+                state_send: game_info_send,
                 first_state_sent: false,
             };
             let id = self.save(&player).await;
@@ -141,7 +160,7 @@ impl PlayerCache {
                 nickname: first_row.get(0),
                 coords: Cartesian::default(),
                 action_recv,
-                game_info_send,
+                state_send: game_info_send,
                 first_state_sent: false,
             }
         };
@@ -163,7 +182,30 @@ impl PlayerCache {
     }
 
     pub async fn sync_and_unload(&mut self, id: u32) {
-        self.sync(id);
+        self.sync(id).await;
         self.players.remove(&id);
+    }
+
+    pub(crate) async fn new_player(&mut self, nickname: String) -> (&mut Player, Sender<Action>, Receiver<State>) {
+        let (action_send, action_recv) = mpsc::channel(10000);
+        let (state_send, state_recv) = mpsc::channel(10000);
+        let mut new_player = Player {
+            nickname: nickname.clone(),
+            action_recv,
+            state_send,
+            coords: Cartesian::default(),
+            first_state_sent: false,
+            id: 0,
+        };
+        let id = {
+            let mut db = self.db.lock().await;
+            db.insert_row_into("Player", vec![0.to_string(), nickname], vec![])
+                .await;
+            new_player.id = db.last_insert_id().await;
+            new_player.id
+        };
+        self.players.insert(id, new_player);
+        let player = self.players.get_mut(&id).unwrap();
+        (player, action_send, state_recv)
     }
 }

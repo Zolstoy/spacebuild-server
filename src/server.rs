@@ -1,10 +1,10 @@
 use crate::error::Error;
+use crate::http;
 use crate::instance::Instance;
 use crate::spacebuild_log;
-use crate::network;
-use crate::network::tls::ClientPki;
-use crate::network::tls::ServerPki;
-use crate::service;
+use crate::tls;
+use crate::tls::ClientPki;
+use crate::tls::ServerPki;
 use crate::Result;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -52,7 +52,7 @@ pub async fn run(
     };
 
     let tls_acceptor = if let Some(pki) = server_config.pki {
-        Some(network::tls::get_acceptor(pki)?)
+        Some(tls::get_acceptor(pki)?)
     } else {
         None
     };
@@ -91,11 +91,7 @@ pub async fn run(
                 instance.lock().await.update(delta.as_secs_f64()).await;
 
                 if must_stop{
-                    let save_result = instance.lock().await.save_all().await;
-                    if save_result.is_err() {
-                        spacebuild_log!(error, "server", "Failed to save instance properly: {}", save_result.err().unwrap());
-                        return Err(Error::FailedToSaveInstanceAtStop);
-                    }
+                    instance.lock().await.save_all().await;
                     spacebuild_log!(info, "server", "Server loop stops now (on stop channel)!");
                     return Ok(())
                 }
@@ -104,10 +100,7 @@ pub async fn run(
             // ON SAVE TICK DELAY----------------------------------
             _ = save_tick_delay.tick() => {
 
-                let save_result = instance.lock().await.save_all().await;
-                if save_result.is_err() {
-                    spacebuild_log!(error, "server", "Failed to save instance properly: {}", save_result.err().unwrap());
-                }
+                instance.lock().await.save_all().await;
             },
             // ----------------------------------------------------
             // ON TCP ACCEPT---------------------------------------
@@ -122,12 +115,12 @@ pub async fn run(
                         if tls_stream.is_err() {
                             spacebuild_log!(warn, "server", "TLS accept error: {}", tls_stream.is_err());
                         } else {
-                            service::upgrade::run_http(tls_stream.unwrap(), cln, addr);
+                            http::run(tls_stream.unwrap(), cln, addr);
                         }
 
                     });
                 } else {
-                    service::upgrade::run_http(stream, Arc::clone(&instance), addr);
+                    http::run(stream, Arc::clone(&instance), addr);
                 }
             },
         }

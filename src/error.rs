@@ -6,8 +6,8 @@ use tokio_tungstenite::tungstenite;
 pub enum Error {
     #[error("Not a text message")]
     NotTextMessage,
-    #[error("Player not authenticated")]
-    PlayerNotAuthenticated,
+    #[error("Not a login action")]
+    NotALoginAction,
     #[error("URL parsed into request errror")]
     UrlIntoRequest,
     #[error("Authentication error: {0}")]
