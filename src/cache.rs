@@ -21,20 +21,43 @@ impl BodyCache {
             db: db.clone(),
         }
     }
+
+    pub(crate) async fn init_db(&mut self) {
+        self.db
+            .lock()
+            .await
+            .create_table(
+                "Body",
+                vec![
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT",
+                    "type INTEGER",
+                    "coord_x REAL",
+                    "coord_y REAL",
+                    "coord_z REAL",
+                    "rotating_speed REAL",
+                    "gravity_center INTEGER",
+                    "FOREIGN KEY (gravity_center) REFERENCES Body (id)",
+                ],
+                vec!["id", "gravity_center"],
+            )
+            .await
+            .unwrap();
+    }
+
     pub fn get_body(&mut self, id: u32) -> &Body {
         self.bodies.get(&id).unwrap()
     }
 
-    // async fn load_body(&self, id: u32) -> Body {
-    //     self.db
-    //         .lock()
-    //         .await
-    //         .select_from_where_equals("Body", "id", id.to_string().as_str())
-    //         .await
-    //         .first()
-    //         .unwrap()
-    //         .into()
-    // }
+    pub(crate) async fn _load_body(&self, id: u32) -> Body {
+        self.db
+            .lock()
+            .await
+            .select_from_where_equals("Body", "id", id.to_string().as_str())
+            .await
+            .first()
+            .unwrap()
+            .into()
+    }
 
     pub(crate) fn add_body(&mut self, id: u32, body: Body) -> &Body {
         self.bodies.insert(id, body);
@@ -127,6 +150,28 @@ pub struct PlayerCache {
 }
 
 impl PlayerCache {
+    pub(crate) async fn init_db(&mut self) {
+        self.db
+            .lock()
+            .await
+            .create_table(
+                "Player",
+                vec![
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT",
+                    "nickname TEXT",
+                    "coord_x REAL",
+                    "coord_y REAL",
+                    "coord_z REAL",
+                    "direction_x REAL",
+                    "direction_y REAL",
+                    "direction_z REAL",
+                ],
+                vec!["id", "nickname"],
+            )
+            .await
+            .unwrap();
+    }
+
     pub async fn load_by_nickname(&mut self, nickname: String) -> Result<(u32, Sender<Action>, Receiver<State>)> {
         if nickname.is_empty() || !nickname.is_printable() {
             return Err(Error::InvalidNickname);
@@ -213,5 +258,12 @@ impl PlayerCache {
         self.players.insert(id, new_player);
         let player = self.players.get_mut(&id).unwrap();
         (player, action_send, state_recv)
+    }
+
+    pub(crate) fn new(db: Arc<Mutex<SqlDb>>) -> Self {
+        Self {
+            players: HashMap::new(),
+            db,
+        }
     }
 }

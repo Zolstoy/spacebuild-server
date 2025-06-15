@@ -13,7 +13,6 @@ use rand_chacha::ChaCha8Rng;
 use scilib::coordinate::cartesian::Cartesian;
 use scilib::coordinate::spherical::Spherical;
 use sqlx::SqlitePool;
-use std::collections::HashMap;
 use std::f64::consts::{PI, TAU};
 use std::fs::File;
 use std::path::Path;
@@ -48,55 +47,21 @@ impl Instance {
             .await
             .map_err(|err| Error::DbOpenError(db_path.to_string(), err))?;
 
-        let mut db = SqlDb::new(pool);
-        Instance::init_db(&mut db).await?;
-
+        let db = SqlDb::new(pool);
         let db = Arc::new(Mutex::new(db));
+
+        let mut bodies = BodyCache::new(db.clone());
+        bodies.init_db().await;
+
+        let mut players = PlayerCache::new(db.clone());
+        players.init_db().await;
+
         Ok(Instance {
-            bodies: BodyCache::new(db.clone()),
+            bodies,
             galaxy: Galaxy::default(),
-            players: PlayerCache {
-                players: HashMap::new(),
-                db,
-            },
+            players,
             rng: ChaCha8Rng::seed_from_u64(0),
         })
-    }
-
-    pub(crate) async fn init_db(db: &mut SqlDb) -> Result<()> {
-        db.create_table(
-            "Body",
-            vec![
-                "id INTEGER PRIMARY KEY AUTOINCREMENT",
-                "type INTEGER",
-                "coord_x REAL",
-                "coord_y REAL",
-                "coord_z REAL",
-                "rotating_speed REAL",
-                "gravity_center INTEGER",
-                "FOREIGN KEY (gravity_center) REFERENCES Body (id)",
-            ],
-            vec!["id", "gravity_center"],
-        )
-        .await?;
-
-        db.create_table(
-            "Player",
-            vec![
-                "id INTEGER PRIMARY KEY AUTOINCREMENT",
-                "nickname TEXT",
-                "coord_x REAL",
-                "coord_y REAL",
-                "coord_z REAL",
-                "direction_x REAL",
-                "direction_y REAL",
-                "direction_z REAL",
-            ],
-            vec!["id", "nickname"],
-        )
-        .await?;
-
-        Ok(())
     }
 
     pub fn borrow_galaxy(&self) -> &Galaxy {
