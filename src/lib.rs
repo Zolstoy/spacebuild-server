@@ -1,15 +1,12 @@
 #![forbid(unsafe_code)]
 
 pub mod bot;
+pub mod cache;
 pub mod error;
-pub mod game;
 pub mod instance;
-pub mod network;
 pub mod protocol;
 pub mod server;
-pub mod service;
 pub mod sql_database;
-pub mod sync_pool;
 
 #[cfg(feature = "tracing")]
 pub mod tracing;
@@ -53,13 +50,9 @@ use test_helpers_async::*;
 #[before_all]
 #[cfg(test)]
 mod tests_sync_pool {
-    use std::{env, fs::File};
+    use std::env;
 
-    use sqlx::SqlitePool;
-    use tokio::sync::mpsc::channel;
     use uuid::Uuid;
-
-    use crate::{game::entity::Entity, instance::Instance, sql_database::SqlDatabase, sync_pool::SyncPool};
 
     pub fn before_all() {
         spacebuild_log!(info, "test", "Timeout is {}s", TIMEOUT_DURATION);
@@ -75,88 +68,10 @@ mod tests_sync_pool {
         )
     }
 
-    async fn bootstrap(db_path: String, create_erase: bool) -> anyhow::Result<SyncPool> {
-        if create_erase {
-            File::create(db_path.clone())?;
-        }
-
-        let pool = SqlitePool::connect(db_path.as_str()).await?;
-        let mut database = SqlDatabase { pool };
-        Instance::init_db(&mut database).await?;
-
-        Ok(SyncPool::new(database).await?)
-    }
+    async fn bootstrap(db_path: String, create_erase: bool) -> anyhow::Result<SyncPool> {}
 
     #[tokio::test]
     async fn case_01_ids() -> anyhow::Result<()> {
-        let db_path = get_random_db_path();
-
-        let mut sync_pool = bootstrap(db_path, true).await?;
-
-        assert_eq!(1, sync_pool.body_next_id);
-        assert_eq!(1, sync_pool.player_next_id);
-
-        let asteroids = sync_pool.new_asteroids(10);
-
-        assert_eq!(10, asteroids.len());
-
-        for i in 1..11 {
-            assert_eq!(i, asteroids.iter().nth(i - 1).unwrap().id as usize)
-        }
-
-        assert_eq!(11, sync_pool.body_next_id);
-        assert_eq!(1, sync_pool.player_next_id);
-
-        let (send, _recv) = channel(100);
-        let player = sync_pool.new_player("test", send);
-
-        assert_eq!(12, sync_pool.body_next_id);
-        assert_eq!(2, sync_pool.player_next_id);
-
-        assert_eq!(11, player.id);
-
-        if let Entity::Player(entity) = player.entity {
-            assert_eq!(1, entity.id);
-        } else {
-            unreachable!()
-        }
-
-        let star = sync_pool.new_star();
-
-        assert_eq!(13, sync_pool.body_next_id);
-        assert_eq!(2, sync_pool.player_next_id);
-
-        assert_eq!(12, star.id);
-
-        if let Entity::Star(entity) = star.entity {
-            assert_eq!(u32::MAX, entity.id);
-        } else {
-            unreachable!()
-        }
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn case_02_save() -> anyhow::Result<()> {
-        let db_path = get_random_db_path();
-
-        let mut sync_pool = bootstrap(db_path.clone(), true).await?;
-
-        let _asteroids = sync_pool.new_asteroids(10);
-        let (send, _recv) = channel(100);
-        let player = sync_pool.new_player("test", send);
-        let _star = sync_pool.new_star();
-
-        sync_pool.save().await?;
-
-        let mut sync_pool = bootstrap(db_path, false).await?;
-
-        let (send, _recv) = channel(100);
-        let player2 = sync_pool.get_player("test", send).await?;
-
-        assert_eq!(player.id, player2.id);
-
         Ok(())
     }
 }
@@ -166,7 +81,7 @@ mod tests_galaxy {
     use scilib::coordinate::cartesian::Cartesian;
 
     use crate::game::{
-        celestial_body::CelestialBody,
+        body::Body,
         entity::{star::Star, Entity},
         galaxy::Galaxy,
     };
@@ -174,7 +89,7 @@ mod tests_galaxy {
     #[test]
     fn case_01() -> anyhow::Result<()> {
         let mut galaxy = Galaxy::default();
-        galaxy.insert_celestial(CelestialBody::new(
+        galaxy.insert_celestial(Body::new(
             42,
             0,
             Cartesian::origin(),

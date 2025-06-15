@@ -2,7 +2,7 @@ use scilib::coordinate::cartesian::Cartesian;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    game::celestial_body::CelestialBody,
+    game::celestial_body::Body,
     protocol::{BodyInfo, GameInfo, PlayerAction, PlayerInfo},
     spacebuild_log,
 };
@@ -44,7 +44,7 @@ impl Player {
         coordinates: Cartesian,
         speed: f64,
         delta: f64,
-        env: Vec<&CelestialBody>,
+        env: Vec<&Body>,
     ) -> (Cartesian, Cartesian, f64) {
         let mut direction = Cartesian::default();
 

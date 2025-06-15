@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::game::celestial_body::CelestialBody;
+use crate::game::body::Body;
 use crate::game::entity::Entity;
 use crate::game::galaxy::Galaxy;
 use crate::protocol::GameInfo;
@@ -210,7 +210,7 @@ impl Instance {
         }
     }
 
-    pub async fn gen_system(&mut self) -> Result<(CelestialBody, Vec<CelestialBody>)> {
+    pub async fn gen_system(&mut self) -> Result<(Body, Vec<Body>)> {
         let mut rng = ChaCha8Rng::seed_from_u64(0);
         let phi = rng.random_range(-TAU..TAU);
         let theta = rng.random_range(PI - 0.1..PI + 0.1);

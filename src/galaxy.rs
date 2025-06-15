@@ -1,4 +1,4 @@
-use super::{celestial_body::CelestialBody, entity::Entity};
+use super::{body::Body, entity::Entity};
 use crate::spacebuild_log;
 use core::f64;
 use rstar::{RTree, AABB};
@@ -7,23 +7,23 @@ use std::f64::consts::PI;
 
 #[derive(Default)]
 pub struct Galaxy {
-    pub(crate) celestials: RTree<CelestialBody>,
+    pub(crate) celestials: RTree<Body>,
 }
 
 impl Galaxy {
-    pub fn insert_celestial(&mut self, celestial: CelestialBody) {
+    pub fn insert_celestial(&mut self, celestial: Body) {
         self.celestials.insert(celestial);
     }
 
-    pub fn borrow_bodies(&self) -> Vec<&CelestialBody> {
+    pub fn borrow_bodies(&self) -> Vec<&Body> {
         self.celestials.iter().collect()
     }
 
-    pub fn borrow_body(&self, id: u32) -> Option<&CelestialBody> {
+    pub fn borrow_body(&self, id: u32) -> Option<&Body> {
         self.celestials.iter().find(|g| g.id == id)
     }
 
-    pub fn borrow_body_mut(&mut self, id: u32) -> Option<&mut CelestialBody> {
+    pub fn borrow_body_mut(&mut self, id: u32) -> Option<&mut Body> {
         self.celestials.iter_mut().find(|g| g.id == id)
     }
 
@@ -31,7 +31,7 @@ impl Galaxy {
     //     self.celestials.remove(&CelestialBody::dummy(id))
     // }
 
-    fn galactics_in_spherical_view(tree: &RTree<CelestialBody>, center: Cartesian, radius: f64) -> Vec<&CelestialBody> {
+    fn galactics_in_spherical_view(tree: &RTree<Body>, center: Cartesian, radius: f64) -> Vec<&Body> {
         let radius_sq = radius * radius;
         let min = [center.x - radius, center.y - radius, center.z - radius];
         let max = [center.x + radius, center.y + radius, center.z + radius];
@@ -51,7 +51,7 @@ impl Galaxy {
         }
 
         let mut old_rtree = self.celestials.clone();
-        let mut new_rtree = RTree::<CelestialBody>::default();
+        let mut new_rtree = RTree::<Body>::default();
         let mut celestials: Vec<_> = self.celestials.drain().collect();
 
         while celestials.len() > 0 {
