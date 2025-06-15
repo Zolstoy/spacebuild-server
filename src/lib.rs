@@ -55,10 +55,14 @@ use test_helpers_async::*;
 
 #[before_all]
 #[cfg(test)]
-mod tests_cache {
-    use std::env;
+mod test_01_body_cache {
+    use std::{env, sync::Arc};
 
+    use sqlx::SqlitePool;
+    use tokio::sync::Mutex;
     use uuid::Uuid;
+
+    use crate::{body, cache::BodyCache, sqldb::SqlDb};
 
     pub fn before_all() {
         spacebuild_log!(info, "test", "Timeout is {}s", TIMEOUT_DURATION);
@@ -74,42 +78,21 @@ mod tests_cache {
         )
     }
 
-    async fn bootstrap(db_path: String, create_erase: bool) -> anyhow::Result<SyncPool> {}
-
     #[tokio::test]
-    async fn case_01_ids() -> anyhow::Result<()> {
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests_galaxy {
-    use scilib::coordinate::cartesian::Cartesian;
-
-    use crate::game::{
-        body::Body,
-        entity::{star::Star, Entity},
-        galaxy::Galaxy,
-    };
-
-    #[test]
-    fn case_01() -> anyhow::Result<()> {
-        let mut galaxy = Galaxy::default();
-        galaxy.insert_celestial(Body::new(
-            42,
-            0,
-            Cartesian::origin(),
-            Cartesian::origin(),
-            0.,
-            0.,
-            0.,
-            0,
-            Entity::Star(Star::new(42)),
-        ));
-
-        let celestial_ref = galaxy.borrow_body(42);
-        assert!(celestial_ref.is_some());
-        assert_eq!(42, celestial_ref.unwrap().id);
+    async fn case_01_add_get() -> anyhow::Result<()> {
+        let pool = SqlitePool::connect(&get_random_db_path()).await.unwrap();
+        let db = SqlDb::new(pool);
+        let mut cache = BodyCache::new(Arc::new(Mutex::new(db)));
+        let mut body = body::Body::default();
+        body.id = 0;
+        let body_id = body.id;
+        cache.add_body(body_id, body.clone());
+        let body_ref = cache.get_body(body_id);
+        assert_eq!(body_ref.body_type, body.body_type);
+        assert_eq!(body_ref.coords, body.coords);
+        assert_eq!(body_ref.gravity_center, body.gravity_center);
+        assert_eq!(body_ref.id, body.id);
+        assert_eq!(body_ref.rotating_speed, body.rotating_speed);
         Ok(())
     }
 }

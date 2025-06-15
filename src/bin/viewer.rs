@@ -19,8 +19,8 @@ use ratatui::{
 };
 use spacebuild::{
     bot::{self, Bot},
-    network::tls::ClientPki,
     protocol::{Body, State},
+    tls::ClientPki,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -121,7 +121,7 @@ impl App {
                         },
                         State::Env(bodies) => {
                             for body in bodies {
-                                if body.element_type == "Star" {
+                                if body.body_type == "1" {
                                     self.star = body.clone();
                                 }
                                 self.celestials.insert(body.id, body);
@@ -178,7 +178,7 @@ impl App {
             };
             let mut cells = vec![];
             cells.push(Cell::from(Text::from(format!("{}", data.0))));
-            cells.push(Cell::from(Text::from(data.1.element_type.clone())));
+            // cells.push(Cell::from(Text::from(data.1.element_type.clone())));
             cells.push(Cell::from(Text::from(format!("{}", data.1.coords[0] as i32))));
             cells.push(Cell::from(Text::from(format!("{}", data.1.coords[1] as i32))));
             cells.push(Cell::from(Text::from(format!("{}", data.1.coords[2] as i32))));
@@ -255,8 +255,8 @@ impl App {
                         coords[0] -= self.star.coords[0];
                         coords[2] -= self.star.coords[2];
 
-                        match celestials.element_type.as_str() {
-                            "Star" => {
+                        match celestials.body_type.to_string().as_str() {
+                            "1" => {
                                 ctx.layer();
                                 ctx.draw(&Circle {
                                     x: coords[0],
@@ -265,7 +265,7 @@ impl App {
                                     color: Color::White,
                                 });
                             }
-                            "Planet" => {
+                            "2" => {
                                 ctx.layer();
                                 ctx.draw(&Circle {
                                     x: coords[0],
@@ -274,7 +274,7 @@ impl App {
                                     color: Color::Blue,
                                 });
                             }
-                            "Moon" => {
+                            "3" => {
                                 ctx.layer();
                                 ctx.draw(&Circle {
                                     x: coords[0],
@@ -283,21 +283,21 @@ impl App {
                                     color: Color::Yellow,
                                 });
                             }
-                            "Asteroid" => {
+                            "4" => {
                                 ctx.draw(&Points {
                                     coords: &vec![(coords[0], coords[2])],
                                     color: Color::Red,
                                 });
                             }
-                            "Player" => {
-                                ctx.layer();
-                                ctx.draw(&Circle {
-                                    x: coords[0],
-                                    y: coords[2],
-                                    radius: 2.,
-                                    color: Color::Green,
-                                });
-                            }
+                            // "Player" => {
+                            //     ctx.layer();
+                            //     ctx.draw(&Circle {
+                            //         x: coords[0],
+                            //         y: coords[2],
+                            //         radius: 2.,
+                            //         color: Color::Green,
+                            //     });
+                            // }
                             _ => {}
                         }
                     }

@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
 use clap::Parser;
 use spacebuild::{
-    network::tls::ServerPki,
     server::{self, InstanceConfig, ServerConfig},
+    tls::ServerPki,
     tracing,
 };
 use std::{env, io};

@@ -48,15 +48,12 @@ impl Instance {
             .await
             .map_err(|err| Error::DbOpenError(db_path.to_string(), err))?;
 
-        let mut db = SqlDb { pool };
+        let mut db = SqlDb::new(pool);
         Instance::init_db(&mut db).await?;
 
         let db = Arc::new(Mutex::new(db));
         Ok(Instance {
-            bodies: BodyCache {
-                bodies: HashMap::new(),
-                db: db.clone(),
-            },
+            bodies: BodyCache::new(db.clone()),
             galaxy: Galaxy::default(),
             players: PlayerCache {
                 players: HashMap::new(),
@@ -190,7 +187,7 @@ impl Instance {
         let last_id = self.bodies.new_bodies(4, nb_asteroids).await;
 
         for i in 0..nb_asteroids {
-            let mut body = self.bodies.get_body(last_id - i as u32).await.clone();
+            let mut body = self.bodies.get_body(last_id - i as u32).clone();
             body.rotating_speed = self.rng.random_range(0.001..0.01);
             let phi = self.rng.random_range(-TAU..TAU);
             let theta = self.rng.random_range(PI - 0.1..PI + 0.1);

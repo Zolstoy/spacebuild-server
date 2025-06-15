@@ -11,11 +11,17 @@ use tokio::sync::Mutex;
 
 pub struct BodyCache {
     pub(crate) bodies: HashMap<u32, Body>,
-    pub db: Arc<Mutex<SqlDb>>,
+    db: Arc<Mutex<SqlDb>>,
 }
 
 impl BodyCache {
-    pub async fn get_body(&mut self, id: u32) -> &Body {
+    pub fn new(db: Arc<Mutex<SqlDb>>) -> Self {
+        Self {
+            bodies: HashMap::new(),
+            db: db.clone(),
+        }
+    }
+    pub fn get_body(&mut self, id: u32) -> &Body {
         self.bodies.get(&id).unwrap()
     }
 
@@ -30,7 +36,7 @@ impl BodyCache {
     //         .into()
     // }
 
-    fn add_body(&mut self, id: u32, body: Body) -> &Body {
+    pub(crate) fn add_body(&mut self, id: u32, body: Body) -> &Body {
         self.bodies.insert(id, body);
         self.bodies.get(&id).unwrap()
     }
@@ -168,7 +174,7 @@ impl PlayerCache {
         Ok((player.id, action_send, game_info_recv))
     }
 
-    async fn save(&mut self, _player: &Player) -> u32 {
+    pub(crate) async fn save(&mut self, _player: &Player) -> u32 {
         self.db.lock().await.insert_row_into("Player", vec![], vec![]).await
     }
 

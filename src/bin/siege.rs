@@ -7,7 +7,7 @@ use clap::Parser;
 use anyhow::Result;
 use spacebuild::{
     bot::{self, Bot},
-    network::tls::ClientPki,
+    tls::ClientPki,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;

@@ -4,10 +4,14 @@ use sqlx::sqlite::SqliteRow;
 use sqlx::{Pool, Sqlite};
 
 pub struct SqlDb {
-    pub(crate) pool: Pool<Sqlite>,
+    pool: Pool<Sqlite>,
 }
 
 impl SqlDb {
+    pub fn new(pool: Pool<Sqlite>) -> SqlDb {
+        SqlDb { pool }
+    }
+
     pub async fn create_table(&mut self, name: &str, entries: Vec<&str>, indexes: Vec<&str>) -> Result<()> {
         if self
             .select_from_where_equals("sqlite_master ", "name", name)

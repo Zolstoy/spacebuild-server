@@ -8,9 +8,7 @@ mod spacebuild_tests_game {
 
     use futures_time::{future::FutureExt, time::Duration};
     use scilib::coordinate::cartesian::Cartesian;
-    use spacebuild::{
-        bot, instance::Instance, network::tls::ServerPki, protocol::State, server, spacebuild_log, tracing,
-    };
+    use spacebuild::{bot, instance::Instance, protocol::State, server, spacebuild_log, tls::ServerPki, tracing};
     use tokio::{net::TcpListener, sync::Mutex, time::sleep};
     use uuid::Uuid;
 
