@@ -165,7 +165,7 @@ impl Instance {
         let distance = rng.random_range(10000f64..100000f64);
         let coords = Cartesian::from_coord(Spherical::from(distance, theta, phi));
 
-        let mut star = self.bodies.new_star();
+        let mut star = self.bodies.new_body(1).await;
 
         star.coords = coords.clone();
         star.rotating_speed = 1000f64;

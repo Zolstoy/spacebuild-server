@@ -15,14 +15,15 @@ pub struct BodyCache {
 }
 
 impl BodyCache {
-    pub async fn get_body(&mut self, id: u32) -> Body {
-        let maybe_body = self.bodies.get(&id);
-        let body = if maybe_body.is_some() {
-            maybe_body.unwrap()
-        } else {
-            self.add_body(id, self.load_body(id).await)
-        };
-        body.clone()
+    pub async fn get_body(&mut self, id: u32) -> &Body {
+        self.bodies.get(&id).unwrap()
+        // let maybe_body = self.bodies.get(&id);
+        // let body = if maybe_body.is_some() {
+        //     return maybe_body.unwrap();
+        // } else {
+        //     self.add_body(id, self.load_body(id).await)
+        // };
+        // body
     }
 
     async fn load_body(&self, id: u32) -> Body {
@@ -64,6 +65,31 @@ impl BodyCache {
         for body in bodies {
             self.add_body(body.id, body.clone());
         }
+    }
+
+    pub(crate) async fn new_body(&mut self, body_type: u8) {
+        let mut new_body = Body {
+            body_type,
+            ..Default::default()
+        };
+        {
+            let mut db = self.db.lock().await;
+            db.insert_row_into(
+                "Body",
+                vec![
+                    0.to_string(),
+                    new_body.body_type.to_string(),
+                    new_body.coords.x.to_string(),
+                    new_body.coords.y.to_string(),
+                    new_body.coords.z.to_string(),
+                    0f32.to_string(),
+                    0.to_string(),
+                ],
+                vec![],
+            );
+            new_body.id = db.last_insert_id().await;
+        }
+        self.add_body(new_body.id, new_body);
     }
 }
 
