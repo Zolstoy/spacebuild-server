@@ -3,7 +3,7 @@ use scilib::coordinate::cartesian::Cartesian;
 use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Body {
     pub(crate) id: u32,
     pub(crate) coords: Cartesian,

@@ -1,3 +1,4 @@
+use crate::body::Body;
 use crate::cache::BodyCache;
 use crate::cache::PlayerCache;
 use crate::error::Error;
@@ -136,7 +137,7 @@ impl Instance {
 
                 let (send, recv) = mpsc::channel(10000);
 
-                let mut player = self.bodies.new_player(&nickname, send);
+                let mut player = self.players.new_player(&nickname, send);
                 player.coords = player_coords;
                 player.local_speed = 100f64;
                 player.gravity_center = star_id;
@@ -174,7 +175,7 @@ impl Instance {
         let nb_planets = rng.random_range(5..15);
 
         for _ in 0..nb_planets {
-            let mut planet = self.bodies.new_planet();
+            let mut planet = Body::default();
             planet.rotating_speed = rng.random_range(0.001..0.01);
             let phi = rng.random_range(-TAU..TAU);
             let theta = rng.random_range(PI - 0.1..PI + 0.1);
