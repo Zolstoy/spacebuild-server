@@ -51,7 +51,7 @@ rand_chacha = "0.9.0"
 ratatui = "0.29.0"
 regex = "1.11.1"
 rstar = "0.12.2"
-rustls = { version = "0.23.27"}
+rustls = { version = "0.23.28"}
 rustls-native-certs = { version = "0.8.1"}
 rustls-pemfile = { version = "2.2.0"}
 rustls-pki-types = { version = "1.12.0"}
@@ -64,7 +64,7 @@ thiserror = "2.0.12"
 tokio = { version = "1.45.1", features = ["full"]}
 tokio-rustls = { version = "0.26.2"}
 tokio-stream = "0.1.17"
-tokio-tungstenite = {version = "0.26.2", features = ["rustls"]}
+tokio-tungstenite = {version = "0.27.0", features = ["rustls"]}
 uuid = {version = "1.17.0", features = ["v4","fast-rng","macro-diagnostics","serde"]}
 webpki = { version = "0.22.4", features = ["alloc"]}
 webpki-roots = { version = "1.0.0"}

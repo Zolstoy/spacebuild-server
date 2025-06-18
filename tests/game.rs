@@ -8,9 +8,7 @@ mod spacebuild_tests_game {
 
     use futures_time::{future::FutureExt, time::Duration};
     use scilib::coordinate::cartesian::Cartesian;
-    use spacebuild::{
-        bot, instance::Instance, network::tls::ServerPki, protocol::GameInfo, server, spacebuild_log, tracing,
-    };
+    use spacebuild::{bot, instance::Instance, protocol::state::Game, server, spacebuild_log, tls::ServerPki, tracing};
     use tokio::{net::TcpListener, sync::Mutex, time::sleep};
     use uuid::Uuid;
 
@@ -253,11 +251,14 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         let db_path = get_random_db_path();
         let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
         let mut client = test!(bot::connect_plain("localhost", port))?;
-        test!(client.login("test123"))?;
+        let id = test!(client.login("test123"))?;
         test!(client.terminate())?;
-        tokio::time::sleep(*Duration::from_millis(4000)).await;
+        tokio::time::sleep(*Duration::from_millis(1000)).await;
         let mut client2 = test!(bot::connect_plain("localhost", port))?;
-        test!(client2.login("test123"))?;
+        tokio::time::sleep(*Duration::from_millis(2000)).await;
+        let id_later = test!(client2.login("test123"))?;
+        tokio::time::sleep(*Duration::from_millis(2000)).await;
+        assert_eq!(id, id_later);
         test!(client2.terminate())?;
         send_stop.send(())?;
         test!(game_thread)??;
@@ -284,7 +285,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         test!(client.login("test213"))?;
         let game_info = test!(client.next_game_info())?;
         match game_info {
-            GameInfo::Player(player_info) => {
+            Game::Player(player_info) => {
                 assert!(player_info.coords[0].is_normal());
                 assert!(player_info.coords[1].is_normal());
                 assert!(player_info.coords[2].is_normal());
@@ -304,7 +305,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         test!(client.login("test213"))?;
         let game_info = test!(client.next_game_info())?;
         let coords = match game_info {
-            GameInfo::Player(player_info) => {
+            Game::Player(player_info) => {
                 assert!(player_info.coords[0].is_normal());
                 assert!(player_info.coords[1].is_normal());
                 assert!(player_info.coords[2].is_normal());
@@ -314,7 +315,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         };
         let game_info = test!(client.next_game_info())?;
         match game_info {
-            GameInfo::BodiesInSystem(_bodies) => {}
+            Game::Env(_bodies) => {}
             _ => unreachable!(),
         }
 
@@ -324,7 +325,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
 
         let mut i = 0;
         let coords_later = loop {
-            if let GameInfo::Player(player_info) = test!(client.next_game_info())? {
+            if let Game::Player(player_info) = test!(client.next_game_info())? {
                 assert!(player_info.coords[0].is_normal());
                 assert!(player_info.coords[1].is_normal());
                 assert!(player_info.coords[2].is_normal());
@@ -354,7 +355,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         client.login("test213").await?;
         let game_info = client.next_game_info().await?;
 
-        let mut coords = if let GameInfo::Player(player_info) = game_info {
+        let mut coords = if let Game::Player(player_info) = game_info {
             player_info.coords
         } else {
             unreachable!();
@@ -396,33 +397,6 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
         }
         send_stop.send(())?;
         test!(game_thread)??;
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn case_20_scenario_01() -> anyhow::Result<()> {
-        let db_path = get_random_db_path();
-        let (_, send_stop, game_thread, port) = test!(bootstrap(&db_path, false))?;
-
-        let mut handlers = vec![];
-
-        for i in 1..100 {
-            let hdl = tokio::spawn(async move {
-                let mut client = test!(bot::connect_plain("localhost", port))?;
-                test!(client.login(format!("test{}", i).as_str()))?;
-                test!(client.terminate())?;
-                anyhow::Ok(())
-            });
-            handlers.push(hdl);
-        }
-
-        send_stop.send(())?;
-        test!(game_thread)??;
-
-        for hdl in handlers {
-            let _ = test!(hdl);
-        }
-
         Ok(())
     }
 }

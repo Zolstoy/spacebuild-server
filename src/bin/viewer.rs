@@ -19,9 +19,8 @@ use ratatui::{
 };
 use spacebuild::{
     bot::{self, Bot},
-    network::tls::ClientPki,
-    protocol::{BodyInfo, GameInfo},
-    Id,
+    protocol::{state::Body, state::Game},
+    tls::ClientPki,
 };
 use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -81,8 +80,8 @@ async fn run<S: AsyncRead + AsyncWrite + Unpin>(mut client: Bot<S>) -> Result<()
 struct App {
     should_quit: bool,
     cursor: (u16, u16),
-    celestials: HashMap<spacebuild::Id, spacebuild::protocol::BodyInfo>,
-    star: BodyInfo,
+    celestials: HashMap<u32, spacebuild::protocol::state::Body>,
+    star: Body,
     list_scroll: usize,
     list_area: Rect,
     draw_zoom: f64,
@@ -117,12 +116,12 @@ impl App {
                 },
                 Ok(game_info) = client.next_game_info() => {
                     match game_info {
-                        GameInfo::Player(_player_info) => {
+                        Game::Player(_player_info) => {
 
                         },
-                        GameInfo::BodiesInSystem(bodies) => {
+                        Game::Env(bodies) => {
                             for body in bodies {
-                                if body.element_type == "Star" {
+                                if body.body_type == "1" {
                                     self.star = body.clone();
                                 }
                                 self.celestials.insert(body.id, body);
@@ -179,7 +178,7 @@ impl App {
             };
             let mut cells = vec![];
             cells.push(Cell::from(Text::from(format!("{}", data.0))));
-            cells.push(Cell::from(Text::from(data.1.element_type.clone())));
+            // cells.push(Cell::from(Text::from(data.1.element_type.clone())));
             cells.push(Cell::from(Text::from(format!("{}", data.1.coords[0] as i32))));
             cells.push(Cell::from(Text::from(format!("{}", data.1.coords[1] as i32))));
             cells.push(Cell::from(Text::from(format!("{}", data.1.coords[2] as i32))));
@@ -231,7 +230,7 @@ impl App {
             &mut scrollbar_state,
         );
 
-        if self.star.id != Id::default() {
+        if self.star.id != u32::default() {
             let cln = self.celestials.clone();
             let mut x_bounds = [-(self.draw_area.width as f64) / 2., self.draw_area.width as f64 / 2.];
             let mut y_bounds = [-(self.draw_area.height as f64), self.draw_area.height as f64];
@@ -256,8 +255,8 @@ impl App {
                         coords[0] -= self.star.coords[0];
                         coords[2] -= self.star.coords[2];
 
-                        match celestials.element_type.as_str() {
-                            "Star" => {
+                        match celestials.body_type.to_string().as_str() {
+                            "1" => {
                                 ctx.layer();
                                 ctx.draw(&Circle {
                                     x: coords[0],
@@ -266,7 +265,7 @@ impl App {
                                     color: Color::White,
                                 });
                             }
-                            "Planet" => {
+                            "2" => {
                                 ctx.layer();
                                 ctx.draw(&Circle {
                                     x: coords[0],
@@ -275,7 +274,7 @@ impl App {
                                     color: Color::Blue,
                                 });
                             }
-                            "Moon" => {
+                            "3" => {
                                 ctx.layer();
                                 ctx.draw(&Circle {
                                     x: coords[0],
@@ -284,21 +283,21 @@ impl App {
                                     color: Color::Yellow,
                                 });
                             }
-                            "Asteroid" => {
+                            "4" => {
                                 ctx.draw(&Points {
                                     coords: &vec![(coords[0], coords[2])],
                                     color: Color::Red,
                                 });
                             }
-                            "Player" => {
-                                ctx.layer();
-                                ctx.draw(&Circle {
-                                    x: coords[0],
-                                    y: coords[2],
-                                    radius: 2.,
-                                    color: Color::Green,
-                                });
-                            }
+                            // "Player" => {
+                            //     ctx.layer();
+                            //     ctx.draw(&Circle {
+                            //         x: coords[0],
+                            //         y: coords[2],
+                            //         radius: 2.,
+                            //         color: Color::Green,
+                            //     });
+                            // }
                             _ => {}
                         }
                     }

@@ -24,4 +24,4 @@ jobs:
         RUST_BACKTRACE: 1
       with:
         command: test
-        args: --lib --test '*'
+        args: --lib

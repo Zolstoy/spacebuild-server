@@ -1,9 +1,8 @@
 use crate::error::Error;
-use crate::network::tls::{get_connector, ClientPki};
-use crate::protocol::{GameInfo, IntoMessage, PlayerInfo, ShipState};
-use crate::Id;
+use crate::protocol::{IntoMessage, ShipState};
+use crate::tls::{get_connector, ClientPki};
 use crate::{
-    protocol::{AuthInfo, Login, PlayerAction},
+    protocol::{Action, Login},
     Result,
 };
 use futures::SinkExt;
@@ -43,8 +42,8 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         Ok(())
     }
 
-    pub async fn login(&mut self, nickname: &str) -> Result<Id> {
-        self.send_action(PlayerAction::Login(Login {
+    pub async fn login(&mut self, nickname: &str) -> Result<u32> {
+        self.send_action(Action::Login(Login {
             nickname: nickname.to_string(),
         }))
         .await?;
@@ -52,10 +51,10 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         let response = self.next_message().await?;
         match response {
             Message::Text(response_str) => {
-                let login_info: AuthInfo = serde_json::from_str(&response_str)
+                let login_info: crate::protocol::state::Auth = serde_json::from_str(&response_str)
                     .map_err(|err| Error::DeserializeAuthenticationResponseError(err, response_str.to_string()))?;
 
-                let uuid = Id::from_str(login_info.message.as_str())
+                let uuid = u32::from_str(login_info.message.as_str())
                     .map_err(|_err| Error::BadUuidError(login_info.message))?;
 
                 return Ok(uuid);
@@ -73,7 +72,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
     }
 
     pub async fn move_in_space(&mut self, direction: Cartesian) -> Result<()> {
-        self.send_action(PlayerAction::ShipState(ShipState {
+        self.send_action(Action::ShipState(ShipState {
             throttle_up: true,
             direction: [direction.x, direction.y, direction.z],
         }))
@@ -81,7 +80,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         Ok(())
     }
 
-    pub async fn next_game_info(&mut self) -> Result<GameInfo> {
+    pub async fn next_game_info(&mut self) -> Result<crate::protocol::state::Game> {
         let next = self.next_message().await?;
 
         match next {
@@ -96,11 +95,11 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Bot<S> {
         }
     }
 
-    pub async fn until_player_info(&mut self) -> Result<PlayerInfo> {
+    pub async fn until_player_info(&mut self) -> Result<crate::protocol::state::Player> {
         loop {
             let game_info = self.next_game_info().await?;
 
-            if let GameInfo::Player(player) = game_info {
+            if let crate::protocol::state::Game::Player(player) = game_info {
                 return Ok(player);
             }
         }
