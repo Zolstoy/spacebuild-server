@@ -92,13 +92,13 @@ impl Instance {
         );
         let current_system = self.gen_system(Cartesian::from_coord(offset)).await;
 
-        let _player_offset = Spherical::from(
+        let player_offset = Spherical::from(
             self.rng.random_range(200f64..1500f64),
             self.rng.random_range(PI - 0.1..PI + 0.1),
             self.rng.random_range(-TAU..TAU),
         );
         let (player, action_send, state_recv) = self.players.new_player(nickname).await;
-        player.coords = Cartesian::from_coord(offset);
+        player.coords = Cartesian::from_coord(offset) + Cartesian::from_coord(player_offset);
         player.current_system = current_system;
         // + Cartesian::from_coord(player_offset)
 
@@ -159,15 +159,15 @@ impl Instance {
             self.galaxy.insert_celestial(planet);
         }
 
-        let nb_asteroids = self.rng.random_range(500..2500);
+        let nb_asteroids = self.rng.random_range(3000..4000);
         let last_id = self.bodies.new_bodies(4, nb_asteroids).await;
 
         for i in 0..nb_asteroids {
             let mut body = self.bodies.get_body(last_id - i as u32).clone();
-            body.rotating_speed = self.rng.random_range(0.0001..0.001);
+            body.rotating_speed = self.rng.random_range(0.00001..0.01);
             let phi = self.rng.random_range(-TAU..TAU);
-            let theta = self.rng.random_range(PI - 0.1..PI + 0.1);
-            let distance = self.rng.random_range(1500f64..4000f64);
+            let theta = self.rng.random_range(PI - 0.05..PI + 0.05);
+            let distance = self.rng.random_range(2700f64..3700f64);
             body.coords = star.coords.clone() + Cartesian::from_coord(Spherical::from(distance, theta, phi));
             body.gravity_center = star.id;
             self.galaxy.insert_celestial(body);
