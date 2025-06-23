@@ -108,6 +108,9 @@ where
         recv: Receiver<crate::protocol::state::Game>,
     ) -> Result<()> {
         let mut stream = ReceiverStream::new(recv);
+        let mut last_now = std::time::Instant::now();
+        let mut timer = 0f64;
+        let mut cnt = 0;
 
         loop {
             tokio::select! {
@@ -123,7 +126,22 @@ where
                     }
                 },
                 Some(message) = self.websocket.next() => {
-                    // let _ = self.mutex.lock().await;
+                    let now = std::time::Instant::now();
+                    let delta = last_now - now;
+                    last_now = now;
+                    timer += delta.as_secs_f64();
+                    if timer > 1f64 {
+                        if cnt > 20 {
+                            spacebuild_log!(warn, self.address, "Client {} is spamming messages, disconnecting", self.id);
+                            self.instance.lock().await.leave(self.id).await;
+                            let _ = self.websocket.close(None).await;
+                            return Ok(());
+                        } else {
+                            cnt -= 20;
+                        }
+                        timer -= 1f64;
+                    }
+                    cnt += 1;
                     spacebuild_log!(trace, self.address, "Message received");
                     if message.is_err() {
                         spacebuild_log!(info, self.address, "Websocket read error: {}", message.err().unwrap());
