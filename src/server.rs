@@ -58,7 +58,7 @@ pub async fn run(
     };
 
     let mut ref_instant = tokio::time::Instant::now();
-    let tick_value = std::time::Duration::from_millis(250);
+    let tick_value = std::time::Duration::from_millis(100);
     let mut update_tick_delay = tokio::time::interval(tick_value);
     let mut save_tick_delay = tokio::time::interval(std::time::Duration::from_secs(30));
 

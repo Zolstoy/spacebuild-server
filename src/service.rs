@@ -3,6 +3,7 @@ use crate::instance::Instance;
 use crate::protocol::Action;
 use futures::SinkExt;
 use futures::StreamExt;
+use hyper::body::Bytes;
 // use tokio_tungstenite::tungstenite::Message;
 use hyper_tungstenite::tungstenite::Message;
 use hyper_tungstenite::WebSocketStream;
@@ -94,6 +95,13 @@ where
                     return Err(Error::NotALoginAction);
                 }
             }
+            Message::Ping(_) => {
+                spacebuild_log!(trace, self.address, "Ping received AT AUTH, sending pong");
+                if self.websocket.send(Message::Pong(Bytes::new())).await.is_err() {
+                    spacebuild_log!(warn, self.address, "Pong failed");
+                }
+                Err(Error::Retry)
+            }
             _ => {
                 spacebuild_log!(warn, self.address, "Not a text message, closing client...");
                 let _ = self.websocket.close(None).await;
@@ -104,13 +112,10 @@ where
 
     async fn handle_message_for_gameplay(
         &mut self,
-        send: Sender<Action>,
-        recv: Receiver<crate::protocol::state::Game>,
+        action_sender: Sender<Action>,
+        state_receiver: Receiver<crate::protocol::state::Game>,
     ) -> Result<()> {
-        let mut stream = ReceiverStream::new(recv);
-        let mut last_now = std::time::Instant::now();
-        let mut timer = 0f64;
-        let mut cnt = 0;
+        let mut stream = ReceiverStream::new(state_receiver);
 
         loop {
             tokio::select! {
@@ -126,22 +131,6 @@ where
                     }
                 },
                 Some(message) = self.websocket.next() => {
-                    let now = std::time::Instant::now();
-                    let delta = last_now - now;
-                    last_now = now;
-                    timer += delta.as_secs_f64();
-                    if timer > 1f64 {
-                        if cnt > 20 {
-                            spacebuild_log!(warn, self.address, "Client {} is spamming messages, disconnecting", self.id);
-                            self.instance.lock().await.leave(self.id).await;
-                            let _ = self.websocket.close(None).await;
-                            return Ok(());
-                        } else {
-                            cnt -= 20;
-                        }
-                        timer -= 1f64;
-                    }
-                    cnt += 1;
                     spacebuild_log!(trace, self.address, "Message received");
                     if message.is_err() {
                         spacebuild_log!(info, self.address, "Websocket read error: {}", message.err().unwrap());
@@ -158,9 +147,15 @@ where
                                 return Ok(());
                             }
 
-                            send.send(maybe_action.unwrap()).await.unwrap();
+                            action_sender.send(maybe_action.unwrap()).await.unwrap();
 
                         }
+                        Message::Ping(_) => {
+                            spacebuild_log!(trace, self.address, "Ping received, sending pong");
+                            if self.websocket.send(Message::Pong(Bytes::from_static(&[42 as u8]))).await.is_err() {
+                                spacebuild_log!(warn, self.address, "Pong failed");
+                            }
+                        },
                         Message::Close(_) => {
                             self.instance.lock().await.leave(self.id).await;
                             return Ok(());
@@ -178,12 +173,23 @@ where
 
     pub async fn serve(&mut self) -> Result<()> {
         spacebuild_log!(trace, self.address, "About to serve gameplay");
-        let message = self.websocket.next().await;
-        if message.is_none() {
-            return Ok(());
-        }
-        let message = message.unwrap();
-        let (send, recv) = self.handle_message_for_auth(message.unwrap()).await?;
+
+        let (send, recv) = loop {
+            let message = self.websocket.next().await;
+            if message.is_none() {
+                return Ok(());
+            }
+            let message = message.unwrap();
+
+            let result = self.handle_message_for_auth(message.unwrap()).await;
+            if result.is_err() {
+                if let Error::Retry = result.err().unwrap() {
+                    continue;
+                }
+                return Ok(());
+            }
+            break result.unwrap();
+        };
         self.handle_message_for_gameplay(send, recv).await?;
         Ok(())
     }

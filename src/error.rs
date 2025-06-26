@@ -4,6 +4,8 @@ use tokio_tungstenite::tungstenite;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Retry auth")]
+    Retry,
     #[error("Player is new")]
     PlayerIsNew,
     #[error("Not a text message")]

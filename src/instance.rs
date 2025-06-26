@@ -159,7 +159,7 @@ impl Instance {
             self.galaxy.insert_celestial(planet);
         }
 
-        let nb_asteroids = self.rng.random_range(3000..4000);
+        let nb_asteroids = self.rng.random_range(300..600);
         let last_id = self.bodies.new_bodies(4, nb_asteroids).await;
 
         for i in 0..nb_asteroids {

@@ -81,19 +81,19 @@ impl Player {
             self.coords += direction / direction.norm() * 100f64 * delta;
         }
 
-        if throttle_up || !self.first_state_sent {
-            spacebuild_log!(trace, "player", "Sending ");
-            let result = self
-                .state_send
-                .send(protocol::state::Game::Player(protocol::state::Player {
-                    coords: [self.coords.x, self.coords.y, self.coords.z],
-                }))
-                .await;
+        // if throttle_up || !self.first_state_sent {
+        spacebuild_log!(trace, "player", "Sending ");
+        let result = self
+            .state_send
+            .send(protocol::state::Game::Player(protocol::state::Player {
+                coords: [self.coords.x, self.coords.y, self.coords.z],
+            }))
+            .await;
 
-            if result.is_err() {
-                spacebuild_log!(warn, self.nickname, "Failed to send player info");
-            }
+        if result.is_err() {
+            spacebuild_log!(warn, self.nickname, "Failed to send player info");
         }
+        // }
 
         if !self.first_state_sent {
             self.first_state_sent = true
