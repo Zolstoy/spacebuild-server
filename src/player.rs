@@ -42,22 +42,16 @@ impl Player {
         }
     }
 
-    pub async fn update(
-        &mut self,
-        // coordinates: Cartesian,
-        // speed: f64,
-        delta: f64,
-        env: Vec<&Body>,
-    )
-    //  -> (Cartesian, Cartesian, f64)
-    {
+    pub async fn update(&mut self, delta: f64, env: Vec<&Body>) {
         let mut direction = Cartesian::default();
         let mut throttle_up = false;
 
         loop {
             match self.action_recv.try_recv() {
                 Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => unreachable!(),
+                Err(TryRecvError::Disconnected) => {
+                    return;
+                }
                 Ok(action) => match action {
                     Action::ShipState(ship_state) => {
                         if ship_state.throttle_up {
@@ -67,7 +61,9 @@ impl Player {
                                 ship_state.direction[1],
                                 ship_state.direction[2],
                             );
-                            direction /= direction.norm();
+                            if direction.norm() > 0f64 {
+                                direction /= direction.norm();
+                            }
                         }
                     }
                     _ => todo!(),
@@ -75,13 +71,10 @@ impl Player {
             }
         }
 
-        // let mut coords = coordinates.clone();
-
-        if direction.norm() > 0f64 {
+        if throttle_up && direction.norm() > 0f64 {
             self.coords += direction / direction.norm() * 100f64 * delta;
         }
 
-        // if throttle_up || !self.first_state_sent {
         spacebuild_log!(trace, "player", "Sending ");
         let result = self
             .state_send
@@ -93,7 +86,6 @@ impl Player {
         if result.is_err() {
             spacebuild_log!(warn, self.nickname, "Failed to send player info");
         }
-        // }
 
         if !self.first_state_sent {
             self.first_state_sent = true
@@ -123,7 +115,5 @@ impl Player {
                 .await
                 .unwrap();
         }
-
-        // (coords, direction, speed)
     }
 }

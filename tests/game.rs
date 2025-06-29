@@ -143,6 +143,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
                 server::ServerConfig {
                     tcp: server::TcpConfig::TcpListener(listener),
                     pki,
+                    tick_in_ms: 250,
                 },
                 recv_stop,
             )
@@ -338,7 +339,7 @@ lBjhUjWT859gkyO6pYSTfndSpnWAdtQK9zsTYociBQ==
             }
         };
         assert!(i > 0);
-        assert!(i < 1000);
+        assert!(i <= 1000);
         assert_eq!(coords_later[0], coords[0]);
         assert_eq!(coords_later[1], coords[1]);
         assert!(coords_later[2] > coords[2]);

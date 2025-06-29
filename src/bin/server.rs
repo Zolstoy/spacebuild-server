@@ -65,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
             ServerConfig {
                 tcp: server::TcpConfig::Port(args.port),
                 pki,
+                tick_in_ms: 250,
             },
             stop_on_input_recv,
         )

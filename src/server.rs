@@ -23,6 +23,7 @@ pub enum TcpConfig {
 pub struct ServerConfig<'a> {
     pub tcp: TcpConfig,
     pub pki: Option<ServerPki<'a>>,
+    pub tick_in_ms: u16,
 }
 
 pub struct ClientConfig<'a> {
@@ -60,7 +61,7 @@ pub async fn run(
     let mut ref_instant = tokio::time::Instant::now();
     let tick_value = std::time::Duration::from_millis(100);
     let mut update_tick_delay = tokio::time::interval(tick_value);
-    let mut save_tick_delay = tokio::time::interval(std::time::Duration::from_secs(30));
+    let mut save_tick_delay = tokio::time::interval(std::time::Duration::from_secs(server_config.tick_in_ms as u64));
 
     spacebuild_log!(
         info,
