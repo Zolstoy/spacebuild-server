@@ -97,13 +97,13 @@ impl Instance {
         );
         let current_system = self.gen_system(Cartesian::from_coord(offset)).await;
 
-        let _player_offset = Spherical::from(
-            self.rng.random_range(200f64..1500f64),
+        let player_offset = Spherical::from(
+            self.rng.random_range(2500f64..7500f64),
             self.rng.random_range(PI - 0.1..PI + 0.1),
             self.rng.random_range(-TAU..TAU),
         );
         let (player, action_send, state_recv) = self.players.new_player(nickname).await;
-        player.coords = Cartesian::from_coord(offset);
+        player.coords = Cartesian::from_coord(player_offset);
         player.current_system = current_system;
         // + Cartesian::from_coord(player_offset)
 
