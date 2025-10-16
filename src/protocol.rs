@@ -32,6 +32,7 @@ pub struct ShipState {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Action {
     Login(Login),
+    Ping((u32, f64)),
     ShipState(ShipState),
 }
 

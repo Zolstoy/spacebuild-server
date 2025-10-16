@@ -292,7 +292,7 @@ mod test_03_player {
         let (_action_send, action_recv) = mpsc::channel(10000);
         let mut player = Player::new("test123".to_string(), state_send, action_recv);
         player.coords = Cartesian::from(2, 4, 6);
-        player.update(1f64, vec![]).await;
+        player.update(1f64, vec![], &Vec::new()).await;
         assert_eq!(Cartesian::from(2, 4, 6), player.coords);
         Ok(())
     }
@@ -303,7 +303,7 @@ mod test_03_player {
         let (_action_send, action_recv) = mpsc::channel(10000);
         let mut player = Player::new("test123".to_string(), state_send, action_recv);
         player.coords = Cartesian::from(2, 4, 6);
-        player.update(1f64, vec![]).await;
+        player.update(1f64, vec![], &Vec::new()).await;
         let result = state_recv.try_recv();
         assert!(result.is_ok());
         if let protocol::state::Game::Player(player_state) = result.unwrap() {
@@ -329,7 +329,7 @@ mod test_03_player {
                 direction: [0.; 3],
             }))
             .await?;
-        player.update(1f64, vec![]).await;
+        player.update(1f64, vec![], &Vec::new()).await;
         let result = state_recv.try_recv();
         assert!(result.is_ok());
         if let protocol::state::Game::Player(player_state) = result.unwrap() {
@@ -355,7 +355,7 @@ mod test_03_player {
                 direction: [0.; 3],
             }))
             .await?;
-        player.update(1f64, vec![]).await;
+        player.update(1f64, vec![], &Vec::new()).await;
         let result = state_recv.try_recv();
         assert!(result.is_ok());
         if let protocol::state::Game::Player(player_state) = result.unwrap() {
@@ -381,7 +381,7 @@ mod test_03_player {
                 direction: [1f64, 0f64, 0f64],
             }))
             .await?;
-        player.update(1f64, vec![]).await;
+        player.update(1f64, vec![], &Vec::new()).await;
         let result = state_recv.try_recv();
         assert!(result.is_ok());
         if let protocol::state::Game::Player(player_state) = result.unwrap() {

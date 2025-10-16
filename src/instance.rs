@@ -1,3 +1,4 @@
+use crate::body::Body;
 use crate::cache::BodyCache;
 use crate::cache::PlayerCache;
 use crate::error::Error;
@@ -13,6 +14,7 @@ use rand_chacha::ChaCha8Rng;
 use scilib::coordinate::cartesian::Cartesian;
 use scilib::coordinate::spherical::Spherical;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use std::f64::consts::{PI, TAU};
 use std::fs::File;
 use std::path::Path;
@@ -22,6 +24,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 
 pub struct Instance {
+    pub(crate) history: Vec<HashMap<u32, Body>>,
     pub(crate) bodies: BodyCache,
     pub(crate) galaxy: Galaxy,
     pub(crate) players: PlayerCache,
@@ -39,8 +42,9 @@ impl Instance {
         self.bodies.sync(self.galaxy.borrow_bodies());
         for (_, player) in &mut self.players.cache {
             let env = Galaxy::galactics_in_spherical_view(&self.galaxy.celestials, player.coords, 10000f64);
-            player.update(delta, env).await;
+            player.update(delta, env, &self.history).await;
         }
+        self.history.push(self.bodies.cache.clone());
     }
 
     pub async fn from_path(db_path: &'_ str) -> Result<Instance> {
@@ -66,6 +70,7 @@ impl Instance {
             galaxy: Galaxy::default(),
             players,
             rng: ChaCha8Rng::seed_from_u64(random()),
+            history: Vec::new(),
         })
     }
 
